@@ -139,14 +139,18 @@ graph = workflow.compile()
 # -------------------------------
 app = FastAPI()
 
+
 @app.post("/chat")
 async def chat(request: Request):
     body = await request.json()
     user_input = body.get("message")
     user_id = body.get("user_id", "anon")
 
-    # Instancia cliente Qdrant
-    qdrant = QdrantClient(host="localhost", port=6333)
+    # Instancia cliente Qdrant Cloud
+    qdrant = QdrantClient(
+        url=os.getenv("QDRANT_HOST"),
+        api_key=os.getenv("QDRANT_API_KEY"),
+    )
 
     state = {
         "input": user_input,
