@@ -1,0 +1,76 @@
+# Ambiente virtual
+.venv/
+venv/
+ENV/
+env/
+
+# Arquivos de cache do Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pkl
+
+# Configs e histórico de Jupyter
+.ipynb_checkpoints
+
+# Arquivos de log
+*.log
+
+# Configs de sistema/macOS
+.DS_Store
+
+# Arquivos temporários de IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Arquivos de testes
+.coverage
+htmlcov/
+.tox/
+.nox/
+.cache/
+pytest_cache/
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+.pyre/
+
+# Arquivos de build Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Configs do Pydantic Settings
+.env
+.env.*
+
+# SQLite ou outros DBs locais (se usar)
+*.db
+*.sqlite3
+
+# Docker
+*.pid
+*.tar
+*.gz
+*.bak
+docker-compose.override.yml
+
+# VS Code settings específicas
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+
+# node_modules se tiver algum frontend embutido
+node_modules/
+
+# coverage tools
+coverage.xml
+*.cover
+
+# Langchain / LLM
+*.jsonl
+*.embedding
