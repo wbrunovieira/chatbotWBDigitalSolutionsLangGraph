@@ -8,8 +8,8 @@ from qdrant_client.http.models import VectorParams, Distance
 from config import DEEPSEEK_API_KEY
 from sentence_transformers import SentenceTransformer
 
+# Carrega o modelo de embedding uma única vez
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-
 
 def compute_embedding(text: str) -> list:
     """
@@ -77,13 +77,44 @@ async def retrieve_company_context(state: dict) -> dict:
         company_context = ""
     return {**state, "company_context": company_context, "step": "retrieve_company_context"}
 
+async def retrieve_user_context(state: dict) -> dict:
+    """
+    Searches the Qdrant collection 'chat_logs' for previous conversations
+    from the same user (based on user_id) and combines them into a context.
+    """
+    # Define um filtro para o user_id nos payloads
+    query_filter = {"must": [{"key": "user_id", "match": {"value": state.get("user_id")}}]}
+    # Usamos um vetor dummy (zeros) pois estamos interessados apenas no filtro.
+    dummy_vector = [0.0] * 384
+    try:
+        results = state["qdrant_client"].search(
+            collection_name="chat_logs",
+            query_vector=dummy_vector,
+            limit=5,
+            query_filter=query_filter
+        )
+        # Combine as respostas anteriores (ou outro campo que preferir)
+        if results:
+            user_context = "\n".join([r.payload.get("response", "") for r in results])
+        else:
+            user_context = ""
+    except Exception as e:
+        logging.error("Error retrieving user context: %s", e)
+        user_context = ""
+    return {**state, "user_context": user_context, "step": "retrieve_user_context"}
+
 async def augment_query(state: dict) -> dict:
     """
-    Augments the user query with the retrieved company context.
+    Augments the user query with the retrieved company context and user history.
     """
     company_context = state.get("company_context", "")
+    user_context = state.get("user_context", "")
     user_input = state.get("user_input", "")
-    augmented = f"Company Context: {company_context}\n\nUser Query: {user_input}"
+    augmented = (
+        f"Company Context: {company_context}\n"
+        f"User History: {user_context}\n\n"
+        f"User Query: {user_input}"
+    )
     return {**state, "augmented_input": augmented, "step": "augment_query"}
 
 async def generate_response(state: dict) -> dict:
@@ -150,10 +181,6 @@ async def revise_response(state: dict) -> dict:
     return {**state, "revised_response": revised, "step": "revise_response"}
 
 async def save_log_qdrant(state: dict) -> dict:
-    """
-    Instead of using a dummy vector, this function combines the log fields
-    into one text, computes a real embedding, and then upserts the log to Qdrant.
-    """
     data_to_save = {
         "user_id": state.get("user_id"),
         "user_input": state.get("user_input"),
@@ -165,7 +192,7 @@ async def save_log_qdrant(state: dict) -> dict:
     logging.info("Saving to Qdrant: %s", data_to_save)
     print("Data sent to Qdrant:", data_to_save)
     
-
+    # Combine key log fields into one text for semantic embedding
     combined_text = (
         f"User ID: {data_to_save.get('user_id', '')}\n"
         f"User Input: {data_to_save.get('user_input', '')}\n"
@@ -173,9 +200,7 @@ async def save_log_qdrant(state: dict) -> dict:
         f"Revised Response: {data_to_save.get('revised_response', '')}\n"
         f"Intent: {data_to_save.get('intent', '')}"
     )
-
-    log_embedding = compute_embedding(combined_text)  
-    
+    log_embedding = compute_embedding(combined_text)  # Now returns a vector of dimension 384
     point = {
         "id": int(time.time()),
         "vector": log_embedding,
