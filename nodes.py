@@ -6,6 +6,18 @@ import logging
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import VectorParams, Distance
 from config import DEEPSEEK_API_KEY
+from sentence_transformers import SentenceTransformer
+
+embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+
+def compute_embedding(text: str) -> list:
+    """
+    Computes a real embedding for the given text using Sentence Transformers.
+    Returns a list of floats.
+    """
+    embedding = embedding_model.encode(text)
+    return embedding.tolist()
 
 async def detect_intent(state: dict) -> dict:
     prompt = f"""
@@ -34,7 +46,6 @@ async def detect_intent(state: dict) -> dict:
     data = response.json()
     raw_intent = data["choices"][0]["message"]["content"].strip()
     
-
     match = re.search(r'"([^"]+)"', raw_intent)
     intent = match.group(1) if match else raw_intent
 
@@ -45,8 +56,39 @@ async def detect_intent(state: dict) -> dict:
     
     return {**state, "intent": intent, "step": "detect_intent"}
 
+async def retrieve_company_context(state: dict) -> dict:
+    """
+    Searches the Qdrant collection 'company_info' for the company context
+    using the embedding of the user's query.
+    """
+    embedding = compute_embedding(state["user_input"])
+    try:
+        results = state["qdrant_client"].search(
+            collection_name="company_info",
+            query_vector=embedding,
+            limit=1
+        )
+        if results:
+            company_context = results[0].payload.get("company_info", "")
+        else:
+            company_context = ""
+    except Exception as e:
+        logging.error("Error retrieving company context: %s", e)
+        company_context = ""
+    return {**state, "company_context": company_context, "step": "retrieve_company_context"}
+
+async def augment_query(state: dict) -> dict:
+    """
+    Augments the user query with the retrieved company context.
+    """
+    company_context = state.get("company_context", "")
+    user_input = state.get("user_input", "")
+    augmented = f"Company Context: {company_context}\n\nUser Query: {user_input}"
+    return {**state, "augmented_input": augmented, "step": "augment_query"}
+
 async def generate_response(state: dict) -> dict:
-    messages = state.get("messages", []) + [{"role": "user", "content": state["user_input"]}]
+    query = state.get("augmented_input", state["user_input"])
+    messages = state.get("messages", []) + [{"role": "user", "content": query}]
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
@@ -108,6 +150,10 @@ async def revise_response(state: dict) -> dict:
     return {**state, "revised_response": revised, "step": "revise_response"}
 
 async def save_log_qdrant(state: dict) -> dict:
+    """
+    Instead of using a dummy vector, this function combines the log fields
+    into one text, computes a real embedding, and then upserts the log to Qdrant.
+    """
     data_to_save = {
         "user_id": state.get("user_id"),
         "user_input": state.get("user_input"),
@@ -119,9 +165,20 @@ async def save_log_qdrant(state: dict) -> dict:
     logging.info("Saving to Qdrant: %s", data_to_save)
     print("Data sent to Qdrant:", data_to_save)
     
+
+    combined_text = (
+        f"User ID: {data_to_save.get('user_id', '')}\n"
+        f"User Input: {data_to_save.get('user_input', '')}\n"
+        f"Response: {data_to_save.get('response', '')}\n"
+        f"Revised Response: {data_to_save.get('revised_response', '')}\n"
+        f"Intent: {data_to_save.get('intent', '')}"
+    )
+
+    log_embedding = compute_embedding(combined_text)  
+    
     point = {
         "id": int(time.time()),
-        "vector": [0.0] * 128,  
+        "vector": log_embedding,
         "payload": data_to_save,
     }
     try:

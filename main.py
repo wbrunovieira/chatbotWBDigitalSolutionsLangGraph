@@ -7,10 +7,13 @@ import os
 import logging
 from dotenv import load_dotenv
 from config import QDRANT_HOST, QDRANT_API_KEY
+from nodes import compute_embedding  
+import time
 
 load_dotenv()
 
 app = FastAPI()
+
 
 @app.post("/chat")
 async def chat(request: Request):
@@ -18,21 +21,53 @@ async def chat(request: Request):
     user_input = body.get("message")
     user_id = body.get("user_id", "anon")
 
-
+    # Instantiate Qdrant client
     qdrant = QdrantClient(
         url=QDRANT_HOST,
         api_key=QDRANT_API_KEY,
     )
 
-
+  
     try:
         qdrant.get_collection(collection_name="chat_logs")
     except Exception as e:
         logging.info("Collection 'chat_logs' not found. Creating collection...")
         qdrant.create_collection(
             collection_name="chat_logs",
-            vectors_config=VectorParams(size=128, distance=Distance.COSINE)
+            vectors_config=VectorParams(size=384, distance=Distance.COSINE)
         )
+    
+
+    try:
+        col_info = qdrant.get_collection(collection_name="company_info")
+        current_dim = None
+        if hasattr(col_info, "config") and col_info.config and hasattr(col_info.config, "vectors"):
+            current_dim = col_info.config.vectors.size
+        if current_dim != 384:
+            logging.info("Collection 'company_info' has dimension %s (expected 384). Deleting and recreating...", current_dim)
+            qdrant.delete_collection(collection_name="company_info")
+            raise Exception("Recreate collection")
+    except Exception as e:
+        logging.info("Collection 'company_info' not found or recreated. Creating collection and upserting company info...")
+        qdrant.create_collection(
+            collection_name="company_info",
+            vectors_config=VectorParams(size=384, distance=Distance.COSINE)
+        )
+
+        try:
+            with open("company_info.txt", "r", encoding="utf-8") as f:
+                info = f.read()
+        except Exception as ex:
+            logging.error("Error reading company_info.txt: %s", ex)
+            info = "No company information available."
+      
+        embedding = compute_embedding(info)
+        point = {
+            "id": 1,
+            "vector": embedding,
+            "payload": {"company_info": info}
+        }
+        qdrant.upsert(collection_name="company_info", points=[point])
 
     state = {
         "user_input": user_input,
