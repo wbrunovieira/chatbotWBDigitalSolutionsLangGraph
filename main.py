@@ -8,6 +8,8 @@ import logging
 from dotenv import load_dotenv
 from config import QDRANT_HOST, QDRANT_API_KEY
 from nodes import compute_embedding  
+from cache import get_cached_response, set_cached_response
+from hashlib import sha256
 import time
 
 load_dotenv()
@@ -19,6 +21,13 @@ async def chat(request: Request):
     body = await request.json()
     user_input = body.get("message")
     user_id = body.get("user_id", "anon")
+
+    cache_key = sha256(user_input.encode('utf-8')).hexdigest()
+
+    cached_result = await get_cached_response(cache_key)
+    if cached_result:
+        return {**cached_result, "cached": True}
+
 
 
     qdrant = QdrantClient(
@@ -84,9 +93,16 @@ async def chat(request: Request):
 
     result = await graph.ainvoke(state)
 
-    return {
+
+    response_data = {
         "raw_response": result.get("response"),
         "revised_response": result.get("revised_response"),
         "detected_intent": result.get("intent"),
-        "final_step": result.get("step")
+        "final_step": result.get("step"),
+        "cached": False
     }
+
+
+    await set_cached_response(cache_key, response_data)
+
+    return response_data
