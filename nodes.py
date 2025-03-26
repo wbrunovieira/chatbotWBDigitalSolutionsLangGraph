@@ -5,8 +5,9 @@ import time
 import logging
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import VectorParams, Distance
-from config import DEEPSEEK_API_KEY
+from config import DEEPSEEK_API_KEY, EVOLUTION_API_URL, EVOLUTION_API_KEY, MY_WHATSAPP_NUMBER
 from sentence_transformers import SentenceTransformer
+
 
 # Carrega o modelo de embedding uma única vez
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -19,41 +20,48 @@ def compute_embedding(text: str) -> list:
     embedding = embedding_model.encode(text)
     return embedding.tolist()
 
-async def detect_intent(state: dict) -> dict:
-    prompt = f"""
-    Classify the intent of this message in one keyword:
-    "{state['user_input']}"
-    Possible intents: inquire_services, request_quote, chat_with_agent, schedule_meeting
-    """
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "deepseek-chat",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.5
-                }
-            )
-    except httpx.ReadTimeout:
-        logging.error("Request timed out in DeepSeek API call for intent detection")
-        return {**state, "response": "Sorry, the service is taking too long to respond. Please try again later.", "step": "error_timeout"}
-    
-    data = response.json()
-    raw_intent = data["choices"][0]["message"]["content"].strip()
-    
-    match = re.search(r'"([^"]+)"', raw_intent)
-    intent = match.group(1) if match else raw_intent
 
-    expected_intents = {"request_quote", "inquire_services", "chat_with_agent", "schedule_meeting"}
-    if intent not in expected_intents:
-        logging.error("Unrecognized intent: %s. Using 'inquire_services' as default.", intent)
-        intent = "inquire_services"
-    
+async def detect_intent(state: dict) -> dict:
+    user_input = state["user_input"]
+
+    # Detecta telefone brasileiro (simplificado) ou e-mail
+    phone_pattern = r'(\(?\d{2}\)?\s?\d{4,5}[- ]?\d{4})'
+    email_pattern = r'[\w\.-]+@[\w\.-]+\.\w+'
+
+    if re.search(phone_pattern, user_input) or re.search(email_pattern, user_input):
+        intent = "share_contact"
+    else:
+        # Caso não tenha contato explícito, chama o modelo DeepSeek
+        prompt = f"""
+        Classify the intent of this message with ONLY ONE of these keywords:
+        "inquire_services", "request_quote", "chat_with_agent", "schedule_meeting".
+
+        Message:
+        "{user_input}"
+
+        Intent:
+        """
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    "https://api.deepseek.com/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "deepseek-chat",
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.1
+                    }
+                )
+                data = response.json()
+                raw_intent = data["choices"][0]["message"]["content"].strip().lower()
+                intent = raw_intent if raw_intent in {"request_quote", "inquire_services", "chat_with_agent", "schedule_meeting"} else "inquire_services"
+        except Exception as e:
+            logging.error(f"Error in intent detection: {e}")
+            intent = "inquire_services"  # fallback seguro
+
     return {**state, "intent": intent, "step": "detect_intent"}
 
 async def retrieve_company_context(state: dict) -> dict:
@@ -110,7 +118,7 @@ async def augment_query(state: dict) -> dict:
     
     augmented = f"""
     You are an assistant from WB Digital Solutions, a company specialized in creating premium custom websites, business automation, and AI-driven solutions.
-
+    If the user's question clearly indicates interest in requesting a quote, detailed pricing, project specifics, or hiring services directly, explicitly ask the user to provide their WhatsApp number or email so that our team can quickly contact them directly.
     Based on the company context and the user's question, provide a clear, professional, friendly response.
 
     Always consider these important aspects if relevant:
@@ -208,7 +216,7 @@ async def save_log_qdrant(state: dict) -> dict:
     logging.info("Saving to Qdrant: %s", data_to_save)
     print("Data sent to Qdrant:", data_to_save)
     
-    # Combine key log fields into one text for semantic embedding
+
     combined_text = (
         f"User ID: {data_to_save.get('user_id', '')}\n"
         f"User Input: {data_to_save.get('user_input', '')}\n"
@@ -216,7 +224,7 @@ async def save_log_qdrant(state: dict) -> dict:
         f"Revised Response: {data_to_save.get('revised_response', '')}\n"
         f"Intent: {data_to_save.get('intent', '')}"
     )
-    log_embedding = compute_embedding(combined_text)  # Now returns a vector of dimension 384
+    log_embedding = compute_embedding(combined_text)  
     point = {
         "id": int(time.time()),
         "vector": log_embedding,
@@ -232,3 +240,36 @@ async def save_log_qdrant(state: dict) -> dict:
         logging.error("Error saving log to Qdrant: %s", e)
     
     return state
+
+
+
+async def send_contact_whatsapp(state: dict) -> dict:
+    user_contact = state["user_input"]  
+    user_id = state["user_id"]
+
+    message = f"📥 *Novo contato recebido pelo chatbot!*\n\nUsuário: {user_id}\nContato fornecido: {user_contact}"
+
+    headers = {
+        "apikey": EVOLUTION_API_KEY,
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "number": MY_WHATSAPP_NUMBER,
+        "text": message
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+          response = await client.post(EVOLUTION_API_URL, headers=headers, json=payload)
+          response.raise_for_status()
+        success_message = "Thanks for sharing your contact! Our team will contact you shortly. 🚀"
+    except Exception as e:
+        logging.error(f"Error sending contact via WhatsApp: {e}")
+        success_message = "There was an issue sending your contact, please contact us directly."
+
+    return {
+        **state,
+        "response": success_message,
+        "step": "send_contact_whatsapp"
+    }

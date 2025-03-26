@@ -276,3 +276,13 @@ directly.
 - **Reporting Security Concerns**
   - Provide clear instructions for users to report
     suspicious activities.
+
+
+## Contact Information
+
+For personalized assistance, quotes, or specific inquiries, please contact us directly:
+
+- **WhatsApp:** [+55 (11) 98286-4581](https://wa.me/5511982864581)
+- **Email:** [bruno@wbdigitalsolutions.com](mailto:bruno@wbdigitalsolutions.com)
+
+We're here to help you achieve digital excellence.

@@ -7,7 +7,8 @@ from nodes import (
     augment_query,
     generate_response,
     revise_response,
-    save_log_qdrant
+    save_log_qdrant,
+    send_contact_whatsapp
 )
 from typing import Any, Dict
 
@@ -33,7 +34,8 @@ workflow.add_conditional_edges(
         "chat_with_agent": END,
         "schedule_meeting": END,
         "inquire_services": "retrieve_company_context",
-        "request_quote": "retrieve_company_context"
+        "request_quote": "retrieve_company_context",
+        "share_contact": "send_contact_whatsapp" 
     }
 )
 
@@ -42,6 +44,9 @@ workflow.add_edge("retrieve_user_context", "augment_query")
 workflow.add_edge("augment_query", "response_generation")
 workflow.add_edge("response_generation", "response_revision")
 workflow.add_edge("response_revision", "log_saving")
+workflow.add_node("send_contact_whatsapp", send_contact_whatsapp)
+
+workflow.add_edge("send_contact_whatsapp", END)
 workflow.add_edge("log_saving", END)
 
 graph = workflow.compile()
