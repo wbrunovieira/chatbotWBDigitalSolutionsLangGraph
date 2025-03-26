@@ -82,9 +82,9 @@ async def retrieve_user_context(state: dict) -> dict:
     Searches the Qdrant collection 'chat_logs' for previous conversations
     from the same user (based on user_id) and combines them into a context.
     """
-    # Define um filtro para o user_id nos payloads
+
     query_filter = {"must": [{"key": "user_id", "match": {"value": state.get("user_id")}}]}
-    # Usamos um vetor dummy (zeros) pois estamos interessados apenas no filtro.
+
     dummy_vector = [0.0] * 384
     try:
         results = state["qdrant_client"].search(
@@ -93,7 +93,7 @@ async def retrieve_user_context(state: dict) -> dict:
             limit=5,
             query_filter=query_filter
         )
-        # Combine as respostas anteriores (ou outro campo que preferir)
+
         if results:
             user_context = "\n".join([r.payload.get("response", "") for r in results])
         else:

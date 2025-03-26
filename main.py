@@ -20,13 +20,13 @@ async def chat(request: Request):
     user_input = body.get("message")
     user_id = body.get("user_id", "anon")
 
-    # Instantiate Qdrant client
+
     qdrant = QdrantClient(
         url=QDRANT_HOST,
         api_key=QDRANT_API_KEY,
     )
 
-    # Ensure 'chat_logs' collection exists with correct dimension (384)
+
     try:
         col_logs = qdrant.get_collection(collection_name="chat_logs")
         current_dim = None
@@ -60,10 +60,10 @@ async def chat(request: Request):
             vectors_config=VectorParams(size=384, distance=Distance.COSINE)
         )
         try:
-            with open("company_info.txt", "r", encoding="utf-8") as f:
+            with open("company_info.md", "r", encoding="utf-8") as f:
                 info = f.read()
         except Exception as ex:
-            logging.error("Error reading company_info.txt: %s", ex)
+            logging.error("Error reading company_info.md: %s", ex)
             info = "No company information available."
         embedding = compute_embedding(info)
         point = {
