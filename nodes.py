@@ -104,17 +104,33 @@ async def retrieve_user_context(state: dict) -> dict:
     return {**state, "user_context": user_context, "step": "retrieve_user_context"}
 
 async def augment_query(state: dict) -> dict:
-    """
-    Augments the user query with the retrieved company context and user history.
-    """
     company_context = state.get("company_context", "")
     user_context = state.get("user_context", "")
     user_input = state.get("user_input", "")
-    augmented = (
-        f"Company Context: {company_context}\n"
-        f"User History: {user_context}\n\n"
-        f"User Query: {user_input}"
-    )
+    
+    augmented = f"""
+    You are an assistant from WB Digital Solutions, a company specialized in creating premium custom websites, business automation, and AI-driven solutions.
+
+    Based on the company context and the user's question, provide a clear, professional, friendly response.
+
+    Always consider these important aspects if relevant:
+    - Typical timelines (4 to 12 weeks) based on complexity.
+    - Detailed project phases: Discovery, Design, Development, Testing & Launch.
+    - Ongoing post-launch support and hosting options.
+    - Robust security practices including Kubernetes, Rust, and LGPD/GDPR compliance.
+    - SEO optimization and multilingual capabilities.
+    - Suggest contacting our team directly for a detailed and tailored discussion.
+
+    Company Context:
+    {company_context}
+
+    User's Previous Interaction Context:
+    {user_context}
+
+    User's Current Question:
+    {user_input}
+    """
+    
     return {**state, "augmented_input": augmented, "step": "augment_query"}
 
 async def generate_response(state: dict) -> dict:
