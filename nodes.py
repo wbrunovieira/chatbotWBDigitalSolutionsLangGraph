@@ -7,9 +7,9 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.models import VectorParams, Distance
 from config import DEEPSEEK_API_KEY, EVOLUTION_API_URL, EVOLUTION_API_KEY, MY_WHATSAPP_NUMBER
 from sentence_transformers import SentenceTransformer
+from langdetect import detect
 
 
-# Carrega o modelo de embedding uma única vez
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
 def compute_embedding(text: str) -> list:
@@ -24,17 +24,17 @@ def compute_embedding(text: str) -> list:
 async def detect_intent(state: dict) -> dict:
     user_input = state["user_input"]
 
-    # Detecta telefone brasileiro (simplificado) ou e-mail
+
     phone_pattern = r'(\(?\d{2}\)?\s?\d{4,5}[- ]?\d{4})'
     email_pattern = r'[\w\.-]+@[\w\.-]+\.\w+'
 
     if re.search(phone_pattern, user_input) or re.search(email_pattern, user_input):
         intent = "share_contact"
     else:
-        # Caso não tenha contato explícito, chama o modelo DeepSeek
+
         prompt = f"""
         Classify the intent of this message with ONLY ONE of these keywords:
-        "inquire_services", "request_quote", "chat_with_agent", "schedule_meeting".
+        "greeting", "inquire_services", "request_quote", "chat_with_agent", "schedule_meeting".
 
         Message:
         "{user_input}"
@@ -57,10 +57,10 @@ async def detect_intent(state: dict) -> dict:
                 )
                 data = response.json()
                 raw_intent = data["choices"][0]["message"]["content"].strip().lower()
-                intent = raw_intent if raw_intent in {"request_quote", "inquire_services", "chat_with_agent", "schedule_meeting"} else "inquire_services"
+                intent = raw_intent if raw_intent in {"greeting","request_quote", "inquire_services", "chat_with_agent", "schedule_meeting"} else "inquire_services"
         except Exception as e:
             logging.error(f"Error in intent detection: {e}")
-            intent = "inquire_services"  # fallback seguro
+            intent = "inquire_services"  
 
     return {**state, "intent": intent, "step": "detect_intent"}
 
@@ -241,8 +241,6 @@ async def save_log_qdrant(state: dict) -> dict:
     
     return state
 
-
-
 async def send_contact_whatsapp(state: dict) -> dict:
     user_contact = state["user_input"]  
     user_id = state["user_id"]
@@ -273,3 +271,51 @@ async def send_contact_whatsapp(state: dict) -> dict:
         "response": success_message,
         "step": "send_contact_whatsapp"
     }
+
+from langdetect import detect
+
+async def generate_greeting_response(state: dict) -> dict:
+    user_input = state.get("user_input", "")
+
+    try:
+        detected_lang = detect(user_input)
+    except Exception:
+        detected_lang = "en"  
+
+    if detected_lang == "en":
+        response = (
+            "Hello! 👋 I'm the virtual assistant from WB Digital Solutions. "
+            "We help companies grow with fast websites, smart automations, and AI-powered tools. "
+            "Tell me what you're looking for — a quote, a specific service, or just some questions? 😊"
+        )
+
+    elif detected_lang == "es":
+        response = (
+            "¡Hola! 👋 Soy el asistente virtual de WB Digital Solutions. "
+            "Ayudamos a las empresas a crecer con sitios web rápidos, automatizaciones inteligentes y soluciones con IA. "
+            "¿En qué puedo ayudarte? ¿Quieres una cotización, información sobre un servicio o tienes alguna duda? 😊"
+        )
+
+    elif detected_lang == "it":
+        response = (
+            "Ciao! 👋 Sono l'assistente virtuale di WB Digital Solutions. "
+            "Aiutiamo le aziende a crescere con siti web veloci, automazioni intelligenti e soluzioni basate sull'intelligenza artificiale. "
+            "Dimmi come posso aiutarti — vuoi un preventivo, informazioni su un servizio, o hai delle domande? 😊"
+        )
+
+    else:  
+        response = (
+            "Olá! 👋 Eu sou o assistente virtual da WB Digital Solutions. "
+            "Ajudamos empresas a crescer com sites rápidos, automações inteligentes e soluções com IA. "
+            "Me conta o que você precisa — um orçamento, saber mais sobre algum serviço ou tirar dúvidas? 😊"
+        )
+
+    return {
+        **state,
+        "response": response,
+        "revised_response": response,
+        "step": "generate_greeting_response"
+    }
+
+
+

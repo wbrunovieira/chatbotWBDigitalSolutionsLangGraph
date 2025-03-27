@@ -2,6 +2,7 @@
 from fastapi import FastAPI, Request
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import VectorParams, Distance
+from fastapi.middleware.cors import CORSMiddleware
 from graph_config import graph
 import os
 import logging
@@ -15,6 +16,14 @@ import time
 load_dotenv()
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.post("/chat")
 async def chat(request: Request):
