@@ -23,12 +23,18 @@ def compute_embedding(text: str) -> list:
 
 async def detect_intent(state: dict) -> dict:
     user_input = state["user_input"]
-
+    lower_input = user_input.lower()
 
     phone_pattern = r'(\(?\d{2}\)?\s?\d{4,5}[- ]?\d{4})'
     email_pattern = r'[\w\.-]+@[\w\.-]+\.\w+'
 
-    if re.search(phone_pattern, user_input) or re.search(email_pattern, user_input):
+    if any(p in lower_input for p in ["falar com um humano", "fale com um humano", "humano", "quero falar com alguém"]):
+        intent = "chat_with_agent"
+    elif any(p in lower_input for p in ["solicitar orçamento", "quero um orçamento", "fazer um orçamento"]):
+        intent = "request_quote"
+    elif any(p in lower_input for p in ["ver serviços", "quais serviços", "serviços disponíveis"]):
+        intent = "inquire_services"
+    elif re.search(phone_pattern, user_input) or re.search(email_pattern, user_input):
         intent = "share_contact"
     else:
 
