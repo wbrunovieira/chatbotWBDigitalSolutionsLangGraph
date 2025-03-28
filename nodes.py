@@ -25,7 +25,7 @@ async def detect_intent(state: dict) -> dict:
     user_input = state["user_input"]
     lower_input = user_input.lower()
 
-    phone_pattern = r'(\(?\d{2}\)?\s?\d{4,5}[- ]?\d{4})'
+    phone_pattern = r'(\+?\d{1,3}\s?)?(\(?\d{2}\)?\s?)?\d{4,5}[- ]?\d{4}'
     email_pattern = r'[\w\.-]+@[\w\.-]+\.\w+'
 
     if any(p in lower_input for p in ["falar com um humano", "fale com um humano", "humano", "quero falar com alguém"]):
@@ -39,8 +39,18 @@ async def detect_intent(state: dict) -> dict:
     else:
 
         prompt = f"""
-        Classify the intent of this message with ONLY ONE of these keywords:
-        "greeting", "inquire_services", "request_quote", "chat_with_agent", "schedule_meeting".
+        Your task is to classify the user's intent based on their message.
+
+        Ignore typos, slang, missing punctuation, and spacing issues.
+
+        Choose only ONE intent from the following list:
+
+        - "greeting" — user is just saying hello.
+        - "inquire_services" — user wants to know what services are offered.
+        - "request_quote" — user asks for pricing, quote, or how much something costs.
+        - "chat_with_agent" — user wants to talk to a human or support agent.
+        - "schedule_meeting" — user wants to book or urgently request a meeting or call.
+        - "share_contact" — user provides an email or phone number.
 
         Message:
         "{user_input}"
@@ -148,8 +158,22 @@ async def augment_query(state: dict) -> dict:
     return {**state, "augmented_input": augmented, "step": "augment_query"}
 
 async def generate_response(state: dict) -> dict:
-    query = state.get("augmented_input", state["user_input"])
+    user_input = state["user_input"]
+    augmented_input = state.get("augmented_input")
+
+
+    instruction = (
+        "Before answering, always make sure to:\n"
+        "Preserve the original language user\'s original language' "
+        "- Ignore typos, missing punctuation, or spacing errors in the user's message.\n"
+        "- Focus on understanding the user's intent as clearly as possible, even if the text is informal or has small issues.\n\n"
+    )
+
+
+    query = f"{instruction}{augmented_input}" if augmented_input else f"{instruction}{user_input}"
+
     messages = state.get("messages", []) + [{"role": "user", "content": query}]
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
@@ -171,19 +195,26 @@ async def generate_response(state: dict) -> dict:
             "response": "Sorry, the service is taking too long to respond. Please try again later.",
             "step": "error_timeout"
         }
-    
+
     data = response.json()
     reply = data["choices"][0]["message"]["content"]
-    
+
     return {
         **state,
         "response": reply,
         "messages": messages + [{"role": "assistant", "content": reply}],
         "step": "generate_response"
     }
-
 async def revise_response(state: dict) -> dict:
-    prompt = f"Rewrite the following response to make it clearer and friendlier:\n\n{state['response']}"
+    prompt = (
+        "Rewrite the following response to make it clearer and friendlier, keeping a professional tone. "
+        "Do NOT include any explanations, introductions, or markdown (like asterisks or hashtags). "
+        "Your output must contain only the final response with natural paragraph spacing. "
+        "Preserve the original language of the response. "
+        "Limit the response to a maximum of 600 characters, ending naturally."
+        "Reply only with the improved text — do not include any extra explanations, titles, or labels like 'Response:'.\n\n"
+        f"{state['response']}"
+    )
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
@@ -208,6 +239,7 @@ async def revise_response(state: dict) -> dict:
     
     data = response.json()
     revised = data["choices"][0]["message"]["content"]
+    revised = revised.replace('\n\n', '\n').replace('\n', '\n\n') 
     return {**state, "revised_response": revised, "step": "revise_response"}
 
 async def save_log_qdrant(state: dict) -> dict:
@@ -278,7 +310,6 @@ async def send_contact_whatsapp(state: dict) -> dict:
         "step": "send_contact_whatsapp"
     }
 
-from langdetect import detect
 
 async def generate_greeting_response(state: dict) -> dict:
     user_input = state.get("user_input", "")
