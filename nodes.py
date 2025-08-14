@@ -24,6 +24,18 @@ def compute_embedding(text: str) -> list:
 async def detect_intent(state: dict) -> dict:
     user_input = state["user_input"]
     lower_input = user_input.lower()
+    
+    # Detecção rápida de saudações simples (sem chamar API)
+    greeting_patterns = [
+        "oi", "olá", "ola", "oie", "oii", "oiii",
+        "hi", "hello", "hey", "hii", "hiii",
+        "hola", "holaa",
+        "ciao", "salve", "ciaoo"
+    ]
+    
+    # Se for apenas uma saudação simples (menos de 15 caracteres e contém padrão de saudação)
+    if len(user_input.strip()) < 15 and any(greet in lower_input for greet in greeting_patterns):
+        return {**state, "intent": "greeting", "step": "detect_intent"}
 
     phone_pattern = r'(\+?\d{1,3}\s?)?(\(?\d{2}\)?\s?)?\d{4,5}[- ]?\d{4}'
     email_pattern = r'[\w\.-]+@[\w\.-]+\.\w+'
