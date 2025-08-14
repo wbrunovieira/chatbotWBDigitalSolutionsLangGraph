@@ -131,9 +131,42 @@ async def augment_query(state: dict) -> dict:
     company_context = state.get("company_context", "")
     user_context = state.get("user_context", "")
     user_input = state.get("user_input", "")
+    language = state.get("language", "pt-BR")
+    page_context = state.get("page_context", "")
+    current_page = state.get("current_page", "/")
+    
+    # Determinar instrução de idioma
+    language_instruction = ""
+    if language == "en":
+        language_instruction = "IMPORTANT: Respond in English."
+    elif language == "es":
+        language_instruction = "IMPORTANTE: Responde en español."
+    elif language == "it":
+        language_instruction = "IMPORTANTE: Rispondi in italiano."
+    else:  # pt-BR or default
+        language_instruction = "IMPORTANTE: Responda em português brasileiro."
+    
+    # Adicionar contexto específico da página
+    page_specific_context = ""
+    if current_page == "/websites":
+        page_specific_context = "The user is currently viewing our web development services page. Focus on website features, technologies, and development process."
+    elif current_page == "/automation":
+        page_specific_context = "The user is exploring our automation services. Emphasize workflow optimization, time savings, and integration capabilities."
+    elif current_page == "/ai":
+        page_specific_context = "The user is interested in AI solutions. Highlight machine learning models, AI integrations, and intelligent automation."
+    elif current_page == "/contact":
+        page_specific_context = "The user is on the contact page, likely ready to reach out. Be more direct about contact options."
     
     augmented = f"""
     You are an assistant from WB Digital Solutions, a company specialized in creating premium custom websites, business automation, and AI-driven solutions.
+    
+    {language_instruction}
+    
+    Current Context:
+    - User is on page: {current_page}
+    - {page_context}
+    {page_specific_context}
+    
     If the user's question clearly indicates interest in requesting a quote, detailed pricing, project specifics, or hiring services directly, explicitly ask the user to provide their WhatsApp number or email so that our team can quickly contact them directly.
     Based on the company context and the user's question, provide a clear, professional, friendly response.
 
@@ -313,37 +346,72 @@ async def send_contact_whatsapp(state: dict) -> dict:
 
 async def generate_greeting_response(state: dict) -> dict:
     user_input = state.get("user_input", "")
+    # Usar o idioma enviado pelo frontend em vez de detectar
+    language = state.get("language", "pt-BR")
+    current_page = state.get("current_page", "/")
+    
+    # Mapear language code para langdetect format
+    if language == "en":
+        detected_lang = "en"
+    elif language == "es":
+        detected_lang = "es"
+    elif language == "it":
+        detected_lang = "it"
+    else:  # pt-BR or default
+        detected_lang = "pt"
 
-    try:
-        detected_lang = detect(user_input)
-    except Exception:
-        detected_lang = "en"  
+    # Adicionar contexto da página na saudação
+    page_hint = ""
+    if current_page == "/websites":
+        page_hint = {"en": "I see you're interested in our web development services!", 
+                     "es": "¡Veo que estás interesado en nuestros servicios de desarrollo web!",
+                     "it": "Vedo che sei interessato ai nostri servizi di sviluppo web!",
+                     "pt": "Vejo que você está interessado em nossos serviços de desenvolvimento web!"}
+    elif current_page == "/automation":
+        page_hint = {"en": "I see you're exploring our automation solutions!",
+                     "es": "¡Veo que estás explorando nuestras soluciones de automatización!",
+                     "it": "Vedo che stai esplorando le nostre soluzioni di automazione!",
+                     "pt": "Vejo que você está explorando nossas soluções de automação!"}
+    elif current_page == "/ai":
+        page_hint = {"en": "I see you're interested in AI solutions!",
+                     "es": "¡Veo que estás interesado en soluciones de IA!",
+                     "it": "Vedo che sei interessato alle soluzioni AI!",
+                     "pt": "Vejo que você está interessado em soluções de IA!"}
+
+    # Adicionar contexto da página se disponível
+    context_addition = ""
+    if page_hint and detected_lang in page_hint:
+        context_addition = f" {page_hint[detected_lang]}"
 
     if detected_lang == "en":
         response = (
             "Hello! 👋 I'm the virtual assistant from WB Digital Solutions. "
-            "We help companies grow with fast websites, smart automations, and AI-powered tools. "
+            "We help companies grow with fast websites, smart automations, and AI-powered tools."
+            f"{context_addition} "
             "Tell me what you're looking for — a quote, a specific service, or just some questions? 😊"
         )
 
     elif detected_lang == "es":
         response = (
             "¡Hola! 👋 Soy el asistente virtual de WB Digital Solutions. "
-            "Ayudamos a las empresas a crecer con sitios web rápidos, automatizaciones inteligentes y soluciones con IA. "
+            "Ayudamos a las empresas a crecer con sitios web rápidos, automatizaciones inteligentes y soluciones con IA."
+            f"{context_addition} "
             "¿En qué puedo ayudarte? ¿Quieres una cotización, información sobre un servicio o tienes alguna duda? 😊"
         )
 
     elif detected_lang == "it":
         response = (
             "Ciao! 👋 Sono l'assistente virtuale di WB Digital Solutions. "
-            "Aiutiamo le aziende a crescere con siti web veloci, automazioni intelligenti e soluzioni basate sull'intelligenza artificiale. "
+            "Aiutiamo le aziende a crescere con siti web veloci, automazioni intelligenti e soluzioni basate sull'intelligenza artificiale."
+            f"{context_addition} "
             "Dimmi come posso aiutarti — vuoi un preventivo, informazioni su un servizio, o hai delle domande? 😊"
         )
 
     else:  
         response = (
             "Olá! 👋 Eu sou o assistente virtual da WB Digital Solutions. "
-            "Ajudamos empresas a crescer com sites rápidos, automações inteligentes e soluções com IA. "
+            "Ajudamos empresas a crescer com sites rápidos, automações inteligentes e soluções com IA."
+            f"{context_addition} "
             "Me conta o que você precisa — um orçamento, saber mais sobre algum serviço ou tirar dúvidas? 😊"
         )
 

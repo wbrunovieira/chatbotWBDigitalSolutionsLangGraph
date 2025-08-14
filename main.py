@@ -28,10 +28,21 @@ app.add_middleware(
 @app.post("/chat")
 async def chat(request: Request):
     body = await request.json()
+    
+    # Extrair todos os campos enviados pelo frontend
     user_input = body.get("message")
     user_id = body.get("user_id", "anon")
+    language = body.get("language", "pt-BR")
+    current_page = body.get("current_page", "/")
+    page_url = body.get("page_url", "")
+    timestamp = body.get("timestamp", "")
+    
+    # Log dos dados recebidos para debug
+    logging.info(f"Request received - User: {user_id}, Language: {language}, Page: {current_page}")
 
-    cache_key = sha256(user_input.encode('utf-8')).hexdigest()
+    # Cache key inclui página e idioma para respostas contextualizadas
+    cache_data = f"{user_input}_{language}_{current_page}"
+    cache_key = sha256(cache_data.encode('utf-8')).hexdigest()
 
     cached_result = await get_cached_response(cache_key)
     if cached_result:
@@ -91,12 +102,35 @@ async def chat(request: Request):
         }
         qdrant.upsert(collection_name="company_info", points=[point])
 
+    # Criar contexto enriquecido com base na página
+    page_context = ""
+    if current_page == "/websites":
+        page_context = "O usuário está vendo a página de serviços de desenvolvimento web"
+    elif current_page == "/automation":
+        page_context = "O usuário está interessado em automação de processos"
+    elif current_page == "/ai":
+        page_context = "O usuário está explorando soluções de IA e Machine Learning"
+    elif current_page == "/contact":
+        page_context = "O usuário está na página de contato"
+    elif current_page.startswith("/blog"):
+        page_context = "O usuário está lendo o blog"
+    else:
+        page_context = "O usuário está na página inicial"
+
     state = {
         "user_input": user_input,
         "user_id": user_id,
+        "language": language,
+        "current_page": current_page,
+        "page_context": page_context,
         "messages": [],
         "memory": {},
-        "metadata": {},
+        "metadata": {
+            "page_url": page_url,
+            "timestamp": timestamp,
+            "language": language,
+            "current_page": current_page
+        },
         "qdrant_client": qdrant
     }
 
@@ -108,6 +142,8 @@ async def chat(request: Request):
         "revised_response": result.get("revised_response"),
         "detected_intent": result.get("intent"),
         "final_step": result.get("step"),
+        "language_used": language,
+        "context_page": current_page,
         "cached": False
     }
 
