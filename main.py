@@ -1,5 +1,6 @@
 # main.py
 from fastapi import FastAPI, Request
+from fastapi.responses import StreamingResponse
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import VectorParams, Distance
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +13,8 @@ from nodes import compute_embedding
 from cache import get_cached_response, set_cached_response
 from hashlib import sha256
 import time
+import asyncio
+import json as json_lib
 
 load_dotenv()
 
@@ -151,13 +154,35 @@ async def chat(request: Request):
     result = await graph.ainvoke(state)
 
 
+    # Estruturar resposta para permitir exibição natural no frontend
+    # Dividir resposta em partes se for muito longa
+    full_response = result.get("revised_response", result.get("response", ""))
+    
+    # Para saudações simples, enviar resposta estruturada
+    response_parts = []
+    if result.get("intent") == "greeting":
+        # Dividir saudação em partes naturais
+        lines = full_response.split(".")
+        for line in lines:
+            if line.strip():
+                response_parts.append(line.strip() + ".")
+    else:
+        # Para outras respostas, dividir em parágrafos ou frases
+        # Preservar quebras de linha e estrutura
+        paragraphs = full_response.split("\n\n")
+        for para in paragraphs:
+            if para.strip():
+                response_parts.append(para.strip())
+    
     response_data = {
         "raw_response": result.get("response"),
-        "revised_response": result.get("revised_response"),
+        "revised_response": full_response,
+        "response_parts": response_parts,  # Array de partes da mensagem
         "detected_intent": result.get("intent"),
         "final_step": result.get("step"),
         "language_used": language,
         "context_page": current_page,
+        "is_greeting": result.get("intent") == "greeting",
         "cached": False
     }
 
@@ -165,3 +190,46 @@ async def chat(request: Request):
     await set_cached_response(cache_key, response_data)
 
     return response_data
+
+
+@app.post("/chat/stream")
+async def chat_stream(request: Request):
+    """Endpoint de streaming para respostas mais naturais"""
+    body = await request.json()
+    
+    # Extrair campos
+    user_input = body.get("message")
+    user_id = body.get("user_id", "anon") 
+    language = body.get("language", "pt-BR")
+    current_page = body.get("current_page", "/")
+    
+    async def generate():
+        # Primeiro evento: confirmação de recebimento
+        yield f"data: {json_lib.dumps({'type': 'acknowledgment', 'message': 'Recebi sua mensagem! 😊'})}\n\n"
+        await asyncio.sleep(0.5)
+        
+        # Processar mensagem (chamar o fluxo normal)
+        # Aqui você processaria a mensagem normalmente
+        # Por simplicidade, vamos simular uma resposta
+        
+        # Segundo evento: processando
+        yield f"data: {json_lib.dumps({'type': 'thinking', 'message': 'Estou pensando na melhor resposta...'})}\n\n"
+        await asyncio.sleep(1)
+        
+        # Terceiro evento: resposta final em partes
+        if "oi" in user_input.lower() or "olá" in user_input.lower():
+            # Saudação em partes
+            parts = [
+                "Olá! 👋 Eu sou o assistente virtual da WB Digital Solutions.",
+                "Ajudamos empresas a crescer com sites rápidos, automações inteligentes e soluções com IA.",
+                "Me conta o que você precisa — um orçamento, saber mais sobre algum serviço ou tirar dúvidas? 😊"
+            ]
+            
+            for i, part in enumerate(parts):
+                yield f"data: {json_lib.dumps({'type': 'message', 'content': part, 'part': i+1, 'total': len(parts)})}\n\n"
+                await asyncio.sleep(0.8)  # Delay natural entre partes
+        
+        # Evento final
+        yield f"data: {json_lib.dumps({'type': 'complete', 'message': 'Resposta completa'})}\n\n"
+    
+    return StreamingResponse(generate(), media_type="text/event-stream")
