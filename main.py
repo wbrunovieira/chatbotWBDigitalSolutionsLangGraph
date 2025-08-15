@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from config import QDRANT_HOST, QDRANT_API_KEY
 from nodes import compute_embedding  
 from cache import get_cached_response, set_cached_response
+from cached_responses import detect_cached_intent
 from hashlib import sha256
 import time
 import asyncio
@@ -42,14 +43,31 @@ async def chat(request: Request):
     
     # Log dos dados recebidos para debug
     logging.info(f"Request received - User: {user_id}, Language: {language}, Page: {current_page}")
+    
+    # PRIMEIRA VERIFICAÇÃO: Cache de respostas frequentes (< 100ms)
+    cached_intent = detect_cached_intent(user_input, language)
+    if cached_intent:
+        logging.info(f"Cache hit for pattern: {cached_intent['cache_key']}")
+        return {
+            "raw_response": cached_intent["response"],
+            "revised_response": cached_intent["response"],
+            "response_parts": cached_intent["response_parts"],
+            "detected_intent": cached_intent["intent"],
+            "final_step": "cached_response",
+            "language_used": language,
+            "context_page": current_page,
+            "is_greeting": False,
+            "cached": True,
+            "cache_type": "pattern_match"
+        }
 
-    # Cache key inclui página e idioma para respostas contextualizadas
+    # SEGUNDA VERIFICAÇÃO: Cache Redis para mensagens exatas
     cache_data = f"{user_input}_{language}_{current_page}"
     cache_key = sha256(cache_data.encode('utf-8')).hexdigest()
 
     cached_result = await get_cached_response(cache_key)
     if cached_result:
-        return {**cached_result, "cached": True}
+        return {**cached_result, "cached": True, "cache_type": "redis"}
 
 
 

@@ -17,7 +17,14 @@ def compute_embedding(text: str) -> list:
     Computes a real embedding for the given text using Sentence Transformers.
     Returns a list of floats.
     """
-    embedding = embedding_model.encode(text)
+    # Limitar o texto para evitar problemas de performance
+    # O modelo tem limite de contexto e textos muito grandes demoram muito
+    max_length = 512  # Limite de tokens para performance
+    if len(text) > max_length * 4:  # Aproximadamente 4 chars por token
+        text = text[:max_length * 4]
+    
+    # Desabilitar progress bar que pode causar lentidão
+    embedding = embedding_model.encode(text, show_progress_bar=False)
     return embedding.tolist()
 
 
