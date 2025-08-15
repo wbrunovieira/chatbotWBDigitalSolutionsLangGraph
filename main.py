@@ -16,6 +16,7 @@ from hashlib import sha256
 import time
 import asyncio
 import json as json_lib
+from deepseek_optimizer import DeepSeekOptimizer
 
 load_dotenv()
 
@@ -251,3 +252,13 @@ async def chat_stream(request: Request):
         yield f"data: {json_lib.dumps({'type': 'complete', 'message': 'Resposta completa'})}\n\n"
     
     return StreamingResponse(generate(), media_type="text/event-stream")
+
+@app.get("/usage-report")
+async def get_usage_report():
+    """Endpoint para visualizar relatório de uso e custos da API DeepSeek"""
+    report = DeepSeekOptimizer.get_usage_report()
+    return {
+        "status": "success",
+        "report": report,
+        "message": f"{'🎉 Desconto de 50% ATIVO!' if report['current_discount'] else '⚠️ Fora do horário de desconto'}"
+    }

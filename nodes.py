@@ -8,6 +8,7 @@ from qdrant_client.http.models import VectorParams, Distance
 from config import DEEPSEEK_API_KEY, EVOLUTION_API_URL, EVOLUTION_API_KEY, MY_WHATSAPP_NUMBER
 from sentence_transformers import SentenceTransformer
 from langdetect import detect
+from deepseek_optimizer import DeepSeekOptimizer, estimate_tokens, should_skip_api_call
 
 
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -77,12 +78,16 @@ async def detect_intent(state: dict) -> dict:
         Intent:
         """
         try:
+            # Adicionar headers de otimização
+            optimization_headers = DeepSeekOptimizer.get_optimization_headers()
+            
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     "https://api.deepseek.com/v1/chat/completions",
                     headers={
                         "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
+                        **optimization_headers  # Headers de otimização
                     },
                     json={
                         "model": "deepseek-chat",
@@ -91,6 +96,16 @@ async def detect_intent(state: dict) -> dict:
                     }
                 )
                 data = response.json()
+                
+                # Rastrear uso de tokens
+                usage = data.get("usage", {})
+                if usage:
+                    DeepSeekOptimizer.update_usage(
+                        input_tokens=usage.get("prompt_tokens", 0),
+                        output_tokens=usage.get("completion_tokens", 0),
+                        cache_hit=response.headers.get("X-Cache-Status") == "hit"
+                    )
+                
                 raw_intent = data["choices"][0]["message"]["content"].strip().lower()
                 intent = raw_intent if raw_intent in {"greeting","request_quote", "inquire_services", "chat_with_agent", "schedule_meeting"} else "inquire_services"
         except Exception as e:
@@ -227,12 +242,16 @@ async def generate_response(state: dict) -> dict:
     messages = state.get("messages", []) + [{"role": "user", "content": query}]
 
     try:
+        # Adicionar headers de otimização
+        optimization_headers = DeepSeekOptimizer.get_optimization_headers()
+        
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 "https://api.deepseek.com/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    **optimization_headers  # Headers de otimização
                 },
                 json={
                     "model": "deepseek-chat",
@@ -249,6 +268,16 @@ async def generate_response(state: dict) -> dict:
         }
 
     data = response.json()
+    
+    # Rastrear uso de tokens
+    usage = data.get("usage", {})
+    if usage:
+        DeepSeekOptimizer.update_usage(
+            input_tokens=usage.get("prompt_tokens", 0),
+            output_tokens=usage.get("completion_tokens", 0),
+            cache_hit=response.headers.get("X-Cache-Status") == "hit"
+        )
+    
     reply = data["choices"][0]["message"]["content"]
 
     return {
@@ -268,12 +297,16 @@ async def revise_response(state: dict) -> dict:
         f"{state['response']}"
     )
     try:
+        # Adicionar headers de otimização
+        optimization_headers = DeepSeekOptimizer.get_optimization_headers()
+        
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 "https://api.deepseek.com/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    **optimization_headers  # Headers de otimização
                 },
                 json={
                     "model": "deepseek-chat",
@@ -290,6 +323,16 @@ async def revise_response(state: dict) -> dict:
         }
     
     data = response.json()
+    
+    # Rastrear uso de tokens
+    usage = data.get("usage", {})
+    if usage:
+        DeepSeekOptimizer.update_usage(
+            input_tokens=usage.get("prompt_tokens", 0),
+            output_tokens=usage.get("completion_tokens", 0),
+            cache_hit=response.headers.get("X-Cache-Status") == "hit"
+        )
+    
     revised = data["choices"][0]["message"]["content"]
     revised = revised.replace('\n\n', '\n').replace('\n', '\n\n') 
     return {**state, "revised_response": revised, "step": "revise_response"}

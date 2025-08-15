@@ -69,3 +69,4 @@ urllib3==2.3.0
 uvicorn==0.34.0
 zstandard==0.23.0
 langdetect==1.0.9
+pytz==2024.2
