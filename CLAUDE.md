@@ -8,7 +8,6 @@ This is a FastAPI-based chatbot application for WB Digital Solutions, featuring:
 - LangGraph-based conversation flow orchestration
 - Qdrant vector database for context retrieval and conversation storage
 - Redis caching for response optimization
-- WhatsApp integration via Evolution API
 - Multi-language support with automatic language detection
 
 ## Development Commands
@@ -49,10 +48,9 @@ docker-compose down
    - Orchestrates the complete conversation flow
 
 3. **nodes.py**: Processing nodes for the conversation graph
-   - Intent detection (greeting, services inquiry, quote request, contact sharing)
+   - Intent detection (greeting, services inquiry, quote request)
    - Context retrieval from Qdrant
    - Response generation using DeepSeek API
-   - WhatsApp notification for contact sharing
 
 ### Data Flow
 
@@ -60,7 +58,6 @@ docker-compose down
 2. Based on intent:
    - Greeting → Direct greeting response
    - Services/Quote → Retrieve company context → Generate augmented response
-   - Contact sharing → Send WhatsApp notification
 3. Response revision for clarity and formatting
 4. Save conversation to Qdrant for future context
 5. Cache response in Redis
@@ -70,7 +67,6 @@ docker-compose down
 - **Qdrant**: Vector database for storing company information and chat logs
 - **Redis**: Response caching (7-day TTL)
 - **DeepSeek API**: LLM for intent detection and response generation
-- **Evolution API**: WhatsApp messaging integration
 - **Sentence Transformers**: Generates embeddings (all-MiniLM-L6-v2, 384 dimensions)
 
 ## Environment Variables
@@ -79,9 +75,6 @@ Required in `.env` file:
 - `DEEPSEEK_API_KEY`: API key for DeepSeek LLM
 - `QDRANT_HOST`: Qdrant server URL
 - `QDRANT_API_KEY`: Qdrant authentication key
-- `EVOLUTION_API_URL`: Evolution API endpoint for WhatsApp
-- `EVOLUTION_API_KEY`: Evolution API authentication
-- `MY_WHATSAPP_NUMBER`: Target WhatsApp number for notifications
 - `REDIS_HOST`: Redis server host (default: localhost)
 - `REDIS_PORT`: Redis server port (default: 6379)
 - `REDIS_DB`: Redis database number (default: 0)

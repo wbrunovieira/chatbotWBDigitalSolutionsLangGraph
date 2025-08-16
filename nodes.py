@@ -5,7 +5,7 @@ import time
 import logging
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import VectorParams, Distance
-from config import DEEPSEEK_API_KEY, EVOLUTION_API_URL, EVOLUTION_API_KEY, MY_WHATSAPP_NUMBER
+from config import DEEPSEEK_API_KEY
 from sentence_transformers import SentenceTransformer
 from langdetect import detect
 from deepseek_optimizer import DeepSeekOptimizer, estimate_tokens, should_skip_api_call
@@ -45,17 +45,12 @@ async def detect_intent(state: dict) -> dict:
     if len(user_input.strip()) < 15 and any(greet in lower_input for greet in greeting_patterns):
         return {**state, "intent": "greeting", "step": "detect_intent"}
 
-    phone_pattern = r'(\+?\d{1,3}\s?)?(\(?\d{2}\)?\s?)?\d{4,5}[- ]?\d{4}'
-    email_pattern = r'[\w\.-]+@[\w\.-]+\.\w+'
-
     if any(p in lower_input for p in ["falar com um humano", "fale com um humano", "humano", "quero falar com alguém"]):
         intent = "chat_with_agent"
     elif any(p in lower_input for p in ["solicitar orçamento", "quero um orçamento", "fazer um orçamento"]):
         intent = "request_quote"
     elif any(p in lower_input for p in ["ver serviços", "quais serviços", "serviços disponíveis"]):
         intent = "inquire_services"
-    elif re.search(phone_pattern, user_input) or re.search(email_pattern, user_input):
-        intent = "share_contact"
     else:
 
         prompt = f"""
@@ -70,7 +65,6 @@ async def detect_intent(state: dict) -> dict:
         - "request_quote" — user asks for pricing, quote, or how much something costs.
         - "chat_with_agent" — user wants to talk to a human or support agent.
         - "schedule_meeting" — user wants to book or urgently request a meeting or call.
-        - "share_contact" — user provides an email or phone number.
 
         Message:
         "{user_input}"
@@ -373,37 +367,6 @@ async def save_log_qdrant(state: dict) -> dict:
         logging.error("Error saving log to Qdrant: %s", e)
     
     return state
-
-async def send_contact_whatsapp(state: dict) -> dict:
-    user_contact = state["user_input"]  
-    user_id = state["user_id"]
-
-    message = f"📥 *Novo contato recebido pelo chatbot!*\n\nUsuário: {user_id}\nContato fornecido: {user_contact}"
-
-    headers = {
-        "apikey": EVOLUTION_API_KEY,
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "number": MY_WHATSAPP_NUMBER,
-        "text": message
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-          response = await client.post(EVOLUTION_API_URL, headers=headers, json=payload)
-          response.raise_for_status()
-        success_message = "Thanks for sharing your contact! Our team will contact you shortly. 🚀"
-    except Exception as e:
-        logging.error(f"Error sending contact via WhatsApp: {e}")
-        success_message = "There was an issue sending your contact, please contact us directly."
-
-    return {
-        **state,
-        "response": success_message,
-        "step": "send_contact_whatsapp"
-    }
 
 
 async def generate_greeting_response(state: dict) -> dict:

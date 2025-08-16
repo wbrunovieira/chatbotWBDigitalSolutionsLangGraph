@@ -262,3 +262,4 @@ async def get_usage_report():
         "report": report,
         "message": f"{'🎉 Desconto de 50% ATIVO!' if report['current_discount'] else '⚠️ Fora do horário de desconto'}"
     }
+

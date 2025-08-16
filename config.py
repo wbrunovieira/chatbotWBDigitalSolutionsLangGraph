@@ -18,7 +18,3 @@ REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 REDIS_DB = int(os.getenv("REDIS_DB", 0))
 REDIS_CACHE_EXPIRE_SECONDS = 604800  # 7 dias
-
-EVOLUTION_API_URL = os.getenv("EVOLUTION_API_URL")
-EVOLUTION_API_KEY = os.getenv("EVOLUTION_API_KEY")
-MY_WHATSAPP_NUMBER = os.getenv("MY_WHATSAPP_NUMBER")
