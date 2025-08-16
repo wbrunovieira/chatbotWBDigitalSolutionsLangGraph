@@ -195,7 +195,7 @@ async def augment_query(state: dict) -> dict:
     - {page_context}
     {page_specific_context}
     
-    If the user's question clearly indicates interest in requesting a quote, detailed pricing, project specifics, or hiring services directly, explicitly ask the user to provide their WhatsApp number or email so that our team can quickly contact them directly.
+    If the user's question clearly indicates interest in requesting a quote, detailed pricing, project specifics, or hiring services directly, provide detailed information and emphasize our fast response time and personalized service.
     Based on the company context and the user's question, provide a clear, professional, friendly response.
 
     Always consider these important aspects if relevant:

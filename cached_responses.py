@@ -32,8 +32,7 @@ CACHED_RESPONSES = {
                     "• **E-commerce**: a partir de R$ 12.000",
                     "• **Projetos com IA**: valores sob consulta",
                     "💡 O valor final depende de: design exclusivo, funcionalidades específicas, integrações e prazo.",
-                    "📲 **Quer um orçamento personalizado?**\nCompartilhe seu WhatsApp ou e-mail e nossa equipe entrará em contato em até 24h!",
-                    "Exemplo: 'Meu WhatsApp é (11) 99999-9999'",
+                    "📲 **Quer um orçamento personalizado?**\nNossa equipe responde em até 2h no horário comercial!",
                     "Transformamos suas ideias em soluções digitais! 🚀"
                 ],
                 "full_response": """Ótima pergunta! 😊 Na WB Digital Solutions, o custo de um site depende da complexidade e funcionalidades do projeto.
@@ -47,9 +46,7 @@ CACHED_RESPONSES = {
 💡 O valor final depende de: design exclusivo, funcionalidades específicas, integrações e prazo.
 
 📲 **Quer um orçamento personalizado?**
-Compartilhe seu WhatsApp ou e-mail e nossa equipe entrará em contato em até 24h!
-
-Exemplo: 'Meu WhatsApp é (11) 99999-9999'
+Nossa equipe responde em até 2h no horário comercial!
 
 Transformamos suas ideias em soluções digitais! 🚀"""
             },
@@ -62,8 +59,7 @@ Transformamos suas ideias em soluções digitais! 🚀"""
                     "• **E-commerce**: from $2,400 USD",
                     "• **AI Projects**: custom quote",
                     "💡 Final price depends on: exclusive design, specific features, integrations, and timeline.",
-                    "📲 **Want a personalized quote?**\nShare your WhatsApp or email and our team will contact you within 24h!",
-                    "Example: 'My WhatsApp is +1 555-0100'",
+                    "📲 **Want a personalized quote?**\nOur team responds within 2h during business hours!",
                     "We transform your ideas into digital solutions! 🚀"
                 ],
                 "full_response": """Great question! 😊 At WB Digital Solutions, website costs depend on project complexity and features.
@@ -77,9 +73,7 @@ Transformamos suas ideias em soluções digitais! 🚀"""
 💡 Final price depends on: exclusive design, specific features, integrations, and timeline.
 
 📲 **Want a personalized quote?**
-Share your WhatsApp or email and our team will contact you within 24h!
-
-Example: 'My WhatsApp is +1 555-0100'
+Our team responds within 2h during business hours!
 
 We transform your ideas into digital solutions! 🚀"""
             },
@@ -92,8 +86,7 @@ We transform your ideas into digital solutions! 🚀"""
                     "• **E-commerce**: desde $2,400 USD",
                     "• **Proyectos con IA**: cotización personalizada",
                     "💡 El precio final depende de: diseño exclusivo, funcionalidades, integraciones y plazo.",
-                    "📲 **¿Quieres una cotización personalizada?**\nComparte tu WhatsApp o email y te contactaremos en 24h.",
-                    "Ejemplo: 'Mi WhatsApp es +34 600 000 000'",
+                    "📲 **¿Quieres una cotización personalizada?**\nNuestro equipo responde en 2h en horario comercial.",
                     "¡Transformamos tus ideas en soluciones digitales! 🚀"
                 ],
                 "full_response": """¡Excelente pregunta! 😊 En WB Digital Solutions, el costo depende de la complejidad del proyecto.
@@ -107,9 +100,7 @@ We transform your ideas into digital solutions! 🚀"""
 💡 El precio final depende de: diseño exclusivo, funcionalidades, integraciones y plazo.
 
 📲 **¿Quieres una cotización personalizada?**
-Comparte tu WhatsApp o email y te contactaremos en 24h.
-
-Ejemplo: 'Mi WhatsApp es +34 600 000 000'
+Nuestro equipo responde en 2h en horario comercial.
 
 ¡Transformamos tus ideas en soluciones digitales! 🚀"""
             },
@@ -122,8 +113,7 @@ Ejemplo: 'Mi WhatsApp es +34 600 000 000'
                     "• **E-commerce**: da €2,200",
                     "• **Progetti con IA**: preventivo personalizzato",
                     "💡 Il prezzo finale dipende da: design esclusivo, funzionalità, integrazioni e tempi.",
-                    "📲 **Vuoi un preventivo personalizzato?**\nCondividi il tuo WhatsApp o email e ti contatteremo in 24h.",
-                    "Esempio: 'Il mio WhatsApp è +39 333 000 0000'",
+                    "📲 **Vuoi un preventivo personalizzato?**\nIl nostro team risponde in 2h durante l'orario lavorativo.",
                     "Trasformiamo le tue idee in soluzioni digitali! 🚀"
                 ],
                 "full_response": """Ottima domanda! 😊 In WB Digital Solutions, il costo dipende dalla complessità del progetto.
@@ -137,9 +127,7 @@ Ejemplo: 'Mi WhatsApp es +34 600 000 000'
 💡 Il prezzo finale dipende da: design esclusivo, funzionalità, integrazioni e tempi.
 
 📲 **Vuoi un preventivo personalizzato?**
-Condividi il tuo WhatsApp o email e ti contatteremo in 24h.
-
-Esempio: 'Il mio WhatsApp è +39 333 000 0000'
+Il nostro team risponde in 2h durante l'orario lavorativo.
 
 Trasformiamo le tue idee in soluzioni digitali! 🚀"""
             }
@@ -181,7 +169,7 @@ Trasformiamo le tue idee in soluzioni digitali! 🚀"""
                     "• Visão computacional",
                     "• Machine Learning personalizado",
                     "💎 **Diferenciais:** Tecnologias modernas (Next.js, TypeScript, Rust), segurança LGPD/GDPR, suporte contínuo.",
-                    "Interessado em algum serviço específico? Compartilhe seu contato!"
+                    "Interessado em algum serviço específico? Fale conosco!"
                 ],
                 "full_response": """🚀 Somos especialistas em transformação digital! Oferecemos:
 
@@ -205,7 +193,7 @@ Trasformiamo le tue idee in soluzioni digitali! 🚀"""
 
 💎 **Diferenciais:** Tecnologias modernas (Next.js, TypeScript, Rust), segurança LGPD/GDPR, suporte contínuo.
 
-Interessado em algum serviço específico? Compartilhe seu contato!"""
+Interessado em algum serviço específico? Fale conosco!"""
             },
             "en": {
                 "response_parts": [
@@ -525,7 +513,7 @@ Serve per una data specifica? Raccontami di più!"""
                     "[bruno@wbdigitalsolutions.com](mailto:bruno@wbdigitalsolutions.com)",
                     "**💬 Resposta rápida:** WhatsApp em até 2h (horário comercial)",
                     "**📅 Agendar reunião:** Envie 'Quero agendar' no WhatsApp",
-                    "Prefere que entremos em contato? Deixe seu WhatsApp aqui mesmo! 👇"
+                    "Nossa equipe responde rápido - estamos prontos para ajudar! 🚀"
                 ],
                 "full_response": """📞 Adoramos conversar com nossos clientes! Aqui estão nossos contatos:
 
@@ -538,7 +526,7 @@ Serve per una data specifica? Raccontami di più!"""
 **💬 Resposta rápida:** WhatsApp em até 2h (horário comercial)
 **📅 Agendar reunião:** Envie 'Quero agendar' no WhatsApp
 
-Prefere que entremos em contato? Deixe seu WhatsApp aqui mesmo! 👇"""
+Nossa equipe responde rápido - estamos prontos para ajudar! 🚀"""
             },
             "en": {
                 "response_parts": [
@@ -549,7 +537,7 @@ Prefere que entremos em contato? Deixe seu WhatsApp aqui mesmo! 👇"""
                     "[bruno@wbdigitalsolutions.com](mailto:bruno@wbdigitalsolutions.com)",
                     "**💬 Quick response:** WhatsApp within 2h (business hours)",
                     "**📅 Schedule meeting:** Send 'Schedule meeting' on WhatsApp",
-                    "Prefer we contact you? Leave your WhatsApp here! 👇"
+                    "Our team responds quickly - we're ready to help! 🚀"
                 ],
                 "full_response": """📞 We love talking to our clients! Here's how to reach us:
 
@@ -562,7 +550,7 @@ Prefere que entremos em contato? Deixe seu WhatsApp aqui mesmo! 👇"""
 **💬 Quick response:** WhatsApp within 2h (business hours)
 **📅 Schedule meeting:** Send 'Schedule meeting' on WhatsApp
 
-Prefer we contact you? Leave your WhatsApp here! 👇"""
+Our team responds quickly - we're ready to help! 🚀"""
             },
             "es": {
                 "response_parts": [
@@ -573,7 +561,7 @@ Prefer we contact you? Leave your WhatsApp here! 👇"""
                     "[bruno@wbdigitalsolutions.com](mailto:bruno@wbdigitalsolutions.com)",
                     "**💬 Respuesta rápida:** WhatsApp en 2h (horario comercial)",
                     "**📅 Agendar reunión:** Envía 'Quiero agendar' por WhatsApp",
-                    "¿Prefieres que te contactemos? ¡Deja tu WhatsApp aquí! 👇"
+                    "Nuestro equipo responde rápido - ¡estamos listos para ayudar! 🚀"
                 ],
                 "full_response": """📞 ¡Nos encanta hablar con nuestros clientes! Contáctanos:
 
@@ -586,7 +574,7 @@ Prefer we contact you? Leave your WhatsApp here! 👇"""
 **💬 Respuesta rápida:** WhatsApp en 2h (horario comercial)
 **📅 Agendar reunión:** Envía 'Quiero agendar' por WhatsApp
 
-¿Prefieres que te contactemos? ¡Deja tu WhatsApp aquí! 👇"""
+Nuestro equipo responde rápido - ¡estamos listos para ayudar! 🚀"""
             },
             "it": {
                 "response_parts": [
@@ -597,7 +585,7 @@ Prefer we contact you? Leave your WhatsApp here! 👇"""
                     "[bruno@wbdigitalsolutions.com](mailto:bruno@wbdigitalsolutions.com)",
                     "**💬 Risposta rapida:** WhatsApp in 2h (orario lavorativo)",
                     "**📅 Fissare riunione:** Invia 'Voglio fissare' su WhatsApp",
-                    "Preferisci che ti contattiamo? Lascia il tuo WhatsApp qui! 👇"
+                    "Il nostro team risponde velocemente - siamo pronti ad aiutarti! 🚀"
                 ],
                 "full_response": """📞 Amiamo parlare con i nostri clienti! Ecco i contatti:
 
@@ -610,7 +598,7 @@ Prefer we contact you? Leave your WhatsApp here! 👇"""
 **💬 Risposta rapida:** WhatsApp in 2h (orario lavorativo)
 **📅 Fissare riunione:** Invia 'Voglio fissare' su WhatsApp
 
-Preferisci che ti contattiamo? Lascia il tuo WhatsApp qui! 👇"""
+Il nostro team risponde velocemente - siamo pronti ad aiutarti! 🚀"""
             }
         }
     }
