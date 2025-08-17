@@ -54,22 +54,29 @@ async def detect_intent(state: dict) -> dict:
     else:
 
         prompt = f"""
-        Your task is to classify the user's intent based on their message.
-
-        Ignore typos, slang, missing punctuation, and spacing issues.
-
-        Choose only ONE intent from the following list:
-
-        - "greeting" — user is just saying hello.
-        - "inquire_services" — user wants to know what services are offered.
-        - "request_quote" — user asks for pricing, quote, or how much something costs.
-        - "chat_with_agent" — user wants to talk to a human or support agent.
-        - "schedule_meeting" — user wants to book or urgently request a meeting or call.
-
-        Message:
-        "{user_input}"
-
-        Intent:
+        Analyze this message and determine if it's related to business/technology services or not.
+        
+        Context: WB Digital Solutions provides websites, automation, and AI solutions for businesses.
+        
+        Message: "{user_input}"
+        
+        Question: Is this message asking about business services, technology, websites, automation, AI, pricing, or contacting the company?
+        
+        If YES (related to business/tech): determine the specific intent:
+        - "greeting" if just saying hello
+        - "inquire_services" if asking about services
+        - "request_quote" if asking about prices
+        - "chat_with_agent" if wants human contact
+        - "schedule_meeting" if wants to schedule
+        
+        If NO (NOT related): return "off_topic"
+        
+        Examples:
+        - "What is the capital of Brazil?" → off_topic
+        - "How much for a website?" → request_quote
+        - "What services do you offer?" → inquire_services
+        
+        Return ONLY the intent word, nothing else:
         """
         try:
             # Adicionar headers de otimização
@@ -101,7 +108,7 @@ async def detect_intent(state: dict) -> dict:
                     )
                 
                 raw_intent = data["choices"][0]["message"]["content"].strip().lower()
-                intent = raw_intent if raw_intent in {"greeting","request_quote", "inquire_services", "chat_with_agent", "schedule_meeting"} else "inquire_services"
+                intent = raw_intent if raw_intent in {"greeting", "request_quote", "inquire_services", "chat_with_agent", "schedule_meeting", "off_topic"} else "inquire_services"
         except Exception as e:
             logging.error(f"Error in intent detection: {e}")
             intent = "inquire_services"  
@@ -189,6 +196,8 @@ async def augment_query(state: dict) -> dict:
     You are an assistant from WB Digital Solutions, a company specialized in creating premium custom websites, business automation, and AI-driven solutions.
     
     {language_instruction}
+    
+    CRITICAL RULE: If the user asks about something COMPLETELY UNRELATED to our services (like geography, general knowledge, math, sports, etc.), politely redirect them to our services. DO NOT answer off-topic questions directly.
     
     Current Context:
     - User is on page: {current_page}
@@ -368,6 +377,66 @@ async def save_log_qdrant(state: dict) -> dict:
     
     return state
 
+
+async def generate_off_topic_response(state: dict) -> dict:
+    """
+    Resposta educada para perguntas fora do escopo, sem gastar com API
+    """
+    language = state.get("language", "pt-BR")
+    
+    # Respostas por idioma
+    responses = {
+        "pt-BR": (
+            "Desculpe, sou um assistente especializado em soluções digitais da WB Digital Solutions. "
+            "Posso ajudar com informações sobre:\n\n"
+            "🌐 **Desenvolvimento de Sites** (e-commerce, institucional, landing pages)\n"
+            "🤖 **Automação de Processos** (chatbots, integração de sistemas)\n"
+            "🧠 **Soluções com IA** (análise de dados, machine learning)\n"
+            "💰 **Orçamentos e Prazos** para projetos digitais\n\n"
+            "Como posso ajudar com seus projetos digitais hoje?"
+        ),
+        "en": (
+            "Sorry, I'm a specialized assistant for WB Digital Solutions' digital services. "
+            "I can help you with:\n\n"
+            "🌐 **Website Development** (e-commerce, corporate, landing pages)\n"
+            "🤖 **Process Automation** (chatbots, system integration)\n"
+            "🧠 **AI Solutions** (data analysis, machine learning)\n"
+            "💰 **Quotes and Timelines** for digital projects\n\n"
+            "How can I help with your digital projects today?"
+        ),
+        "es": (
+            "Lo siento, soy un asistente especializado en soluciones digitales de WB Digital Solutions. "
+            "Puedo ayudarte con:\n\n"
+            "🌐 **Desarrollo Web** (e-commerce, corporativo, landing pages)\n"
+            "🤖 **Automatización de Procesos** (chatbots, integración de sistemas)\n"
+            "🧠 **Soluciones con IA** (análisis de datos, machine learning)\n"
+            "💰 **Presupuestos y Plazos** para proyectos digitales\n\n"
+            "¿Cómo puedo ayudarte con tus proyectos digitales hoy?"
+        ),
+        "it": (
+            "Mi dispiace, sono un assistente specializzato in soluzioni digitali di WB Digital Solutions. "
+            "Posso aiutarti con:\n\n"
+            "🌐 **Sviluppo Web** (e-commerce, aziendale, landing page)\n"
+            "🤖 **Automazione Processi** (chatbot, integrazione sistemi)\n"
+            "🧠 **Soluzioni AI** (analisi dati, machine learning)\n"
+            "💰 **Preventivi e Tempi** per progetti digitali\n\n"
+            "Come posso aiutarti con i tuoi progetti digitali oggi?"
+        )
+    }
+    
+    # Mapear language code
+    lang_map = {"en": "en", "es": "es", "it": "it"}
+    response_lang = lang_map.get(language, "pt-BR")
+    
+    response = responses.get(response_lang, responses["pt-BR"])
+    
+    return {
+        **state,
+        "response": response,
+        "revised_response": response,
+        "step": "generate_off_topic_response",
+        "intent": "off_topic"
+    }
 
 async def generate_greeting_response(state: dict) -> dict:
     user_input = state.get("user_input", "")
