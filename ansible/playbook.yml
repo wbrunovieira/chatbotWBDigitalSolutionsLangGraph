@@ -1,0 +1,199 @@
+---
+- name: Deploy WB Digital Solutions Chatbot
+  hosts: chatbot_server
+  become: yes
+  gather_facts: yes
+
+  vars:
+    app_name: wb-chatbot
+    repo_url: https://github.com/YOUR_GITHUB_USER/chatbotwbdigitalsolutions2MVP.git
+
+  tasks:
+    - name: Display deployment information
+      debug:
+        msg:
+          - "Deploying to: {{ ansible_host }}"
+          - "Application directory: {{ install_path }}"
+          - "Domain: {{ chatbot_domain }}"
+          - "App Port: {{ app_port }}"
+          - "Qdrant Port: {{ qdrant_port }}"
+          - "Redis Port: {{ redis_port }}"
+
+    - name: Verify Docker is installed and running
+      command: docker --version
+      register: docker_check
+      failed_when: docker_check.rc != 0
+
+    - name: Verify Docker Compose is available
+      command: docker compose version
+      register: compose_check
+      failed_when: compose_check.rc != 0
+
+    - name: Create application directory structure
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      loop:
+        - "{{ install_path }}"
+        - "{{ install_path }}/volumes"
+        - "{{ install_path }}/volumes/qdrant_data"
+        - "{{ install_path }}/volumes/redis_data"
+        - "{{ install_path }}/logs"
+        - "{{ install_path }}/backups"
+
+    - name: Clone or update repository
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ install_path }}"
+        force: yes
+        version: main
+      when: repo_url != 'https://github.com/YOUR_GITHUB_USER/chatbotwbdigitalsolutions2MVP.git'
+
+    - name: Check if Docker network exists
+      command: docker network ls --format '{{ '{{' }}.Name{{ '}}' }}'
+      register: docker_networks
+
+    - name: Create Docker network if not exists
+      command: docker network create {{ docker_network }}
+      when: docker_network not in docker_networks.stdout_lines
+
+    - name: Generate secure passwords if not provided
+      set_fact:
+        redis_password: "{{ redis_password | default(lookup('password', '/dev/null length=32 chars=ascii_letters,digits')) }}"
+        qdrant_api_key: "{{ qdrant_api_key | default(lookup('password', '/dev/null length=32 chars=ascii_letters,digits')) }}"
+
+    - name: Remove ALL old compose files FIRST
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ install_path }}/compose.yaml"
+        - "{{ install_path }}/compose.yml"
+        - "{{ install_path }}/docker-compose.yml"
+        - "{{ install_path }}/docker-compose.yaml"
+      ignore_errors: yes
+
+    - name: Stop and remove conflicting containers
+      shell: |
+        docker stop wb_redis wb_qdrant 2>/dev/null || true
+        docker rm wb_redis wb_qdrant 2>/dev/null || true
+      ignore_errors: yes
+
+    - name: Copy production environment file
+      template:
+        src: templates/env.j2
+        dest: "{{ install_path }}/.env"
+        mode: '0600'
+        owner: root
+        group: root
+
+    - name: Copy production docker-compose file
+      template:
+        src: templates/docker-compose.prod.yml.j2
+        dest: "{{ install_path }}/docker-compose.yml"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Copy application files if not using git
+      synchronize:
+        src: "{{ playbook_dir }}/../"
+        dest: "{{ install_path }}/"
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=ansible"
+          - "--exclude=__pycache__"
+          - "--exclude=.env"
+          - "--exclude=volumes"
+          - "--exclude=compose.yaml"
+          - "--exclude=compose.yml"
+          - "--exclude=docker-compose.override.yml"
+      when: repo_url == 'https://github.com/YOUR_GITHUB_USER/chatbotwbdigitalsolutions2MVP.git'
+
+    - name: Build Docker image
+      command: docker compose build
+      args:
+        chdir: "{{ install_path }}"
+      register: build_result
+
+    - name: Stop existing containers
+      command: docker compose down
+      args:
+        chdir: "{{ install_path }}"
+      ignore_errors: yes
+
+    - name: Start application containers
+      command: docker compose up -d
+      args:
+        chdir: "{{ install_path }}"
+      register: deploy_result
+
+    - name: Wait for application to be healthy
+      uri:
+        url: "http://localhost:{{ app_port }}/health"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 30
+      delay: 10
+      ignore_errors: yes
+
+    - name: Configure Nginx for chatbot
+      template:
+        src: templates/nginx-chatbot.conf.j2
+        dest: /etc/nginx/sites-available/{{ chatbot_domain }}.conf
+        mode: '0644'
+      when: enable_ssl
+
+    - name: Enable Nginx site
+      file:
+        src: /etc/nginx/sites-available/{{ chatbot_domain }}.conf
+        dest: /etc/nginx/sites-enabled/{{ chatbot_domain }}.conf
+        state: link
+      when: enable_ssl
+      notify: reload nginx
+
+    - name: Setup SSL certificate with Certbot
+      command: |
+        certbot certonly --nginx
+        -d {{ chatbot_domain }}
+        --non-interactive
+        --agree-tos
+        --email {{ ssl_email }}
+        --redirect
+      when: enable_ssl
+      ignore_errors: yes
+
+    - name: Clean up old Docker images
+      command: docker image prune -f
+      ignore_errors: yes
+
+    - name: Display deployment status
+      debug:
+        msg:
+          - "=========================================="
+          - "Deployment completed successfully!"
+          - "=========================================="
+          - "Application URL: http{{ 's' if enable_ssl else '' }}://{{ chatbot_domain if enable_ssl else ansible_host + ':' + app_port|string }}"
+          - "Application Port: {{ app_port }}"
+          - "Qdrant Port: {{ qdrant_port }}"
+          - "Redis Port: {{ redis_port }}"
+          - "=========================================="
+          - "Credentials saved in {{ install_path }}/.env"
+
+    - name: Show container status
+      command: docker ps --filter "name=chatbot"
+      register: container_status
+
+    - name: Display container status
+      debug:
+        var: container_status.stdout_lines
+
+  handlers:
+    - name: reload nginx
+      systemd:
+        name: nginx
+        state: reloaded
