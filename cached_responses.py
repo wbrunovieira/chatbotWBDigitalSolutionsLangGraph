@@ -629,8 +629,8 @@ Il nostro team risponde velocemente - siamo pronti ad aiutarti! 🚀"""
                     "Sim! 🎓 Desenvolvemos plataformas de ensino completas e personalizadas!",
                     "Nossa expertise inclui:\n• **AVA (Ambiente Virtual de Aprendizagem)** com videoaulas\n• **Gamificação** e trilhas de aprendizado\n• **Sistema de avaliações** e certificados automáticos\n• **Área do aluno e professor** com dashboards intuitivos",
                     "Utilizamos tecnologias modernas para garantir:\n✅ Alta performance mesmo com milhares de alunos\n✅ Vídeos otimizados e streaming adaptativo\n✅ App mobile responsivo\n✅ Integrações com Zoom, Google Meet e ferramentas de pagamento",
-                    "**Prazo médio:** 8 a 12 semanas\n**Suporte:** Treinamento completo e manutenção incluída",
-                    "Clique no botão de orçamento para conversarmos sobre seu projeto educacional! 🚀"
+                    "**Prazo:** 8-12 semanas com suporte completo incluído",
+                    "📱 WhatsApp (11) 98286-4581 - Envio portfólio de projetos educacionais em 2h!"
                 ],
                 "full_response": """Sim! 🎓 Desenvolvemos plataformas de ensino completas e personalizadas!
 
@@ -758,8 +758,8 @@ Clicca sul pulsante preventivo per discutere del tuo progetto educativo! 🚀"""
                     "Sim! 🛒 Criamos lojas virtuais completas e otimizadas para vender muito!",
                     "**Recursos incluídos:**\n• Catálogo ilimitado de produtos\n• Checkout seguro e rápido\n• Integração com Mercado Pago, PagSeguro, Stripe\n• Gestão de estoque automática\n• Cálculo de frete em tempo real",
                     "**Diferenciais WB:**\n🚀 Carregamento ultrarrápido\n📱 Mobile-first (70% das vendas vêm do celular!)\n🔍 SEO otimizado para Google\n📊 Dashboard com métricas de vendas",
-                    "**Investimento:** A partir de R$ 12.000\n**Prazo:** 6 a 10 semanas",
-                    "Solicite um orçamento e comece a vender online profissionalmente! 💰"
+                    "**Investimento:** A partir de R$ 12.000 | **Prazo:** 6-10 semanas",
+                    "📱 WhatsApp (11) 98286-4581 - Análise gratuita do seu projeto em 2h!"
                 ],
                 "full_response": """Sim! 🛒 Criamos lojas virtuais completas e otimizadas para vender muito!
 
@@ -834,7 +834,7 @@ Request a quote and start selling online professionally! 💰"""
                     "**O que automatizamos:**\n• Vendas: Do lead ao pós-venda\n• Marketing: Email, WhatsApp, redes sociais\n• Atendimento: Chatbots inteligentes\n• Gestão: ERP, CRM, planilhas\n• Financeiro: Cobranças, relatórios",
                     "**Ferramentas que dominamos:**\n✅ n8n, Make, Zapier\n✅ APIs personalizadas\n✅ WhatsApp Business API\n✅ Integrações com +1000 apps",
                     "**Benefícios:**\n⏰ Economia de 20h/semana\n💰 Redução de 40% em custos operacionais\n🎯 Zero erros manuais",
-                    "Vamos automatizar seu negócio? Clique para um diagnóstico gratuito! 🚀"
+                    "📱 WhatsApp (11) 98286-4581 - Diagnóstico gratuito do seu processo!"
                 ],
                 "full_response": """Sim! ⚙️ Somos especialistas em automação e integrações!
 
