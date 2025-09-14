@@ -74,6 +74,7 @@
         - "{{ install_path }}/compose.yml"
         - "{{ install_path }}/docker-compose.yml"
         - "{{ install_path }}/docker-compose.yaml"
+        - "{{ install_path }}/compose.local.yaml"
       ignore_errors: yes
 
     - name: Stop and remove conflicting containers
@@ -110,26 +111,57 @@
           - "--exclude=volumes"
           - "--exclude=compose.yaml"
           - "--exclude=compose.yml"
+          - "--exclude=compose.local.yaml"
           - "--exclude=docker-compose.override.yml"
+          - "--exclude=docker-compose.local.yml"
       when: repo_url == 'https://github.com/YOUR_GITHUB_USER/chatbotwbdigitalsolutions2MVP.git'
 
+    - name: List files in application directory
+      command: ls -la
+      args:
+        chdir: "{{ install_path }}"
+      register: dir_contents
+
+    - name: Show directory contents
+      debug:
+        var: dir_contents.stdout_lines
+
     - name: Build Docker image
-      command: docker compose build
+      command: docker compose -f docker-compose.yml build
       args:
         chdir: "{{ install_path }}"
       register: build_result
 
     - name: Stop existing containers
-      command: docker compose down
+      command: docker compose -f docker-compose.yml down
       args:
         chdir: "{{ install_path }}"
       ignore_errors: yes
 
     - name: Start application containers
-      command: docker compose up -d
+      command: docker compose -f docker-compose.yml up -d
       args:
         chdir: "{{ install_path }}"
       register: deploy_result
+      ignore_errors: yes
+
+    - name: Check container status
+      command: docker ps -a
+      register: container_status
+
+    - name: Show container status
+      debug:
+        var: container_status.stdout_lines
+
+    - name: Check Qdrant logs if unhealthy
+      command: docker logs chatbot_qdrant --tail 50
+      register: qdrant_logs
+      ignore_errors: yes
+
+    - name: Show Qdrant logs
+      debug:
+        var: qdrant_logs.stdout_lines
+      when: qdrant_logs is defined
 
     - name: Wait for application to be healthy
       uri:
@@ -141,31 +173,61 @@
       delay: 10
       ignore_errors: yes
 
+    - name: Install Nginx and Certbot
+      apt:
+        name:
+          - nginx
+          - certbot
+          - python3-certbot-nginx
+        state: present
+        update_cache: yes
+
+    - name: Remove old Nginx configurations if exists
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/nginx/sites-enabled/chatbot.wbdigitalsolutions.com.conf
+        - /etc/nginx/sites-available/chatbot.wbdigitalsolutions.com.conf
+      ignore_errors: yes
+
     - name: Configure Nginx for chatbot
       template:
         src: templates/nginx-chatbot.conf.j2
-        dest: /etc/nginx/sites-available/{{ chatbot_domain }}.conf
+        dest: /etc/nginx/sites-available/chatbot.conf
         mode: '0644'
-      when: enable_ssl
 
     - name: Enable Nginx site
       file:
-        src: /etc/nginx/sites-available/{{ chatbot_domain }}.conf
-        dest: /etc/nginx/sites-enabled/{{ chatbot_domain }}.conf
+        src: /etc/nginx/sites-available/chatbot.conf
+        dest: /etc/nginx/sites-enabled/chatbot.conf
         state: link
-      when: enable_ssl
-      notify: reload nginx
+
+    - name: Test Nginx configuration
+      command: nginx -t
+      register: nginx_config_test
+      ignore_errors: yes
+
+    - name: Reload Nginx
+      systemd:
+        name: nginx
+        state: reloaded
+      when: nginx_config_test.rc == 0
 
     - name: Setup SSL certificate with Certbot
-      command: |
-        certbot certonly --nginx
-        -d {{ chatbot_domain }}
-        --non-interactive
-        --agree-tos
-        --email {{ ssl_email }}
-        --redirect
-      when: enable_ssl
+      command: certbot --nginx -n --agree-tos --email {{ ssl_email }} -d {{ chatbot_domain }} --redirect
+      register: ssl_result
       ignore_errors: yes
+      when: ansible_host != "localhost" and ansible_host != "127.0.0.1"
+
+    - name: Setup auto-renewal for SSL certificate
+      cron:
+        name: "Auto renew SSL certificates"
+        job: "certbot renew --quiet --no-self-upgrade"
+        minute: "0"
+        hour: "2"
+        weekday: "1"
+      when: ssl_result is defined and ssl_result.rc == 0
 
     - name: Clean up old Docker images
       command: docker image prune -f
@@ -177,12 +239,15 @@
           - "=========================================="
           - "Deployment completed successfully!"
           - "=========================================="
-          - "Application URL: http{{ 's' if enable_ssl else '' }}://{{ chatbot_domain if enable_ssl else ansible_host + ':' + app_port|string }}"
-          - "Application Port: {{ app_port }}"
-          - "Qdrant Port: {{ qdrant_port }}"
-          - "Redis Port: {{ redis_port }}"
+          - "HTTPS URL: https://{{ chatbot_domain }}"
+          - "HTTP URL: http://{{ chatbot_domain }}"
+          - "Direct Access: http://{{ ansible_host }}:{{ app_port }}"
           - "=========================================="
-          - "Credentials saved in {{ install_path }}/.env"
+          - "Qdrant Dashboard: http://{{ ansible_host }}:{{ qdrant_port }}/dashboard"
+          - "=========================================="
+          - "Test the API:"
+          - "curl https://{{ chatbot_domain }}/health"
+          - "=========================================="
 
     - name: Show container status
       command: docker ps --filter "name=chatbot"
@@ -191,9 +256,3 @@
     - name: Display container status
       debug:
         var: container_status.stdout_lines
-
-  handlers:
-    - name: reload nginx
-      systemd:
-        name: nginx
-        state: reloaded

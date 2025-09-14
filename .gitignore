@@ -58,6 +58,8 @@ dist/
 *.gz
 *.bak
 docker-compose.override.yml
+compose.yaml
+compose.local.yaml
 
 # VS Code settings específicas
 .vscode/settings.json
