@@ -5,9 +5,10 @@ Este diretório contém a automação Ansible para deploy do chatbot no servidor
 ## Servidor de Produção
 
 - **IP**: 45.90.123.190
-- **Domínio**: chatbot.wbdigitalsolutions.com
+- **Domínio**: https://chatbot.wbdigitalsolutions.com
 - **Portas utilizadas**:
-  - 8001: Aplicação Chatbot
+  - 80/443: Nginx (proxy reverso com SSL)
+  - 8001: Aplicação Chatbot (interna)
   - 6333: Qdrant (Vector Database)
   - 6380: Redis (Cache do Chatbot)
 
@@ -55,8 +56,9 @@ ansible-playbook -i inventory.ini playbook.yml
    - Qdrant (vector database)
    - Redis (cache)
    - Aplicação Chatbot
-5. **Configura Nginx** (se SSL habilitado)
-6. **Instala certificado SSL** com Certbot
+5. **Configura Nginx**: Proxy reverso para o domínio
+6. **Instala certificado SSL**: Let's Encrypt via Certbot
+7. **Configura renovação automática**: SSL renovado automaticamente via cron
 
 ## Verificar o status após deploy
 

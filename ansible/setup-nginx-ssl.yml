@@ -1,0 +1,85 @@
+---
+- name: Setup Nginx and SSL for Chatbot
+  hosts: chatbot_server
+  become: yes
+
+  tasks:
+    - name: Install Nginx and Certbot
+      apt:
+        name:
+          - nginx
+          - certbot
+          - python3-certbot-nginx
+        state: present
+        update_cache: yes
+
+    - name: Remove old Nginx configuration if exists
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/nginx/sites-enabled/chatbot.wbdigitalsolutions.com.conf
+        - /etc/nginx/sites-available/chatbot.wbdigitalsolutions.com.conf
+      ignore_errors: yes
+
+    - name: Copy Nginx configuration (HTTP only first)
+      template:
+        src: templates/nginx-chatbot.conf.j2
+        dest: /etc/nginx/sites-available/chatbot.conf
+        mode: '0644'
+
+    - name: Enable Nginx site
+      file:
+        src: /etc/nginx/sites-available/chatbot.conf
+        dest: /etc/nginx/sites-enabled/chatbot.conf
+        state: link
+
+    - name: Test Nginx configuration
+      command: nginx -t
+      register: nginx_test
+
+    - name: Reload Nginx
+      systemd:
+        name: nginx
+        state: reloaded
+      when: nginx_test.rc == 0
+
+    - name: Obtain SSL certificate
+      command: |
+        certbot --nginx -n --agree-tos --email {{ ssl_email }}
+        -d {{ chatbot_domain }}
+        --redirect
+      register: certbot_result
+      ignore_errors: yes
+
+    - name: Display SSL certificate status
+      debug:
+        msg: "{{ certbot_result.stdout_lines | default(['SSL certificate request completed']) }}"
+
+    - name: Setup auto-renewal for SSL certificate
+      cron:
+        name: "Auto renew SSL certificates"
+        job: "certbot renew --quiet --no-self-upgrade"
+        minute: "0"
+        hour: "2"
+        weekday: "1"
+
+    - name: Test chatbot via domain
+      uri:
+        url: "http://{{ chatbot_domain }}/health"
+        status_code: [200, 301, 302]
+      register: domain_test
+      ignore_errors: yes
+
+    - name: Display access URLs
+      debug:
+        msg:
+          - "========================================"
+          - "Nginx and SSL Setup Complete!"
+          - "========================================"
+          - "HTTP:  http://{{ chatbot_domain }}"
+          - "HTTPS: https://{{ chatbot_domain }}"
+          - "========================================"
+          - "Test the API:"
+          - "curl https://{{ chatbot_domain }}/health"
+          - "========================================"

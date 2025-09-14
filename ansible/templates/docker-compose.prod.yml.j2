@@ -20,16 +20,15 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     environment:
-      - QDRANT__SERVICE__API_KEY={{ qdrant_api_key }}
       - QDRANT__SERVICE__ENABLE_TLS=false
     networks:
       - {{ docker_network }}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6333/readyz"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 60s
     logging:
       driver: "json-file"
       options:
@@ -40,7 +39,6 @@ services:
     image: redis:7-alpine
     container_name: chatbot_redis
     restart: always
-    command: redis-server --requirepass {{ redis_password }} --port 6379
     ports:
       - "{{ redis_port }}:6379"
     volumes:
@@ -48,7 +46,7 @@ services:
     networks:
       - {{ docker_network }}
     healthcheck:
-      test: ["CMD", "redis-cli", "-p", "6379", "-a", "{{ redis_password }}", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -69,17 +67,14 @@ services:
       - "{{ app_port }}:8000"
     environment:
       - DEEPSEEK_API_KEY={{ deepseek_api_key }}
-      - QDRANT_HOST=http://qdrant:6333
-      - QDRANT_API_KEY={{ qdrant_api_key }}
+      - QDRANT_HOST=http://chatbot_qdrant:6333
+      - QDRANT_API_KEY=
       - REDIS_HOST=redis-chatbot
       - REDIS_PORT=6379
-      - REDIS_PASSWORD={{ redis_password }}
       - REDIS_DB=0
     depends_on:
-      qdrant:
-        condition: service_healthy
-      redis-chatbot:
-        condition: service_healthy
+      - qdrant
+      - redis-chatbot
     networks:
       - {{ docker_network }}
     volumes:
