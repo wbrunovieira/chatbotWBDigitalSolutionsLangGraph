@@ -76,3 +76,14 @@ coverage.xml
 *.embedding
 
 commands.md
+
+# Ansible - arquivos com credenciais
+ansible/inventory.ini
+ansible/*.retry
+ansible/hosts
+ansible/group_vars/
+ansible/host_vars/
+
+# Arquivos de backup
+*.backup
+*.bak.yml

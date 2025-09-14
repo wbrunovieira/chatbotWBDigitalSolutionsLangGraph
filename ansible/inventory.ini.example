@@ -1,0 +1,27 @@
+[chatbot_server]
+wb_server ansible_host=45.90.123.190 ansible_user=root ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+
+[chatbot_server:vars]
+ansible_python_interpreter=/usr/bin/python3
+
+# Domínio e SSL
+chatbot_domain=chatbot.wbdigitalsolutions.com
+ssl_email=admin@wbdigitalsolutions.com
+enable_ssl=true
+
+# Variáveis de ambiente para produção
+deepseek_api_key=YOUR_DEEPSEEK_API_KEY_HERE
+qdrant_api_key=generate_on_deploy
+redis_password=generate_on_deploy
+
+# Configurações de portas (ajustadas para evitar conflitos com containers existentes)
+app_port=8001
+qdrant_port=6333
+redis_port=6380
+
+# Configurações de rede Docker
+docker_network=wb_network
+
+# Caminhos de instalação
+install_path=/root/chatbot
+data_path=/root/chatbot/volumes
