@@ -601,6 +601,364 @@ Nuestro equipo responde rápido - ¡estamos listos para ayudar! 🚀"""
 Il nostro team risponde velocemente - siamo pronti ad aiutarti! 🚀"""
             }
         }
+    },
+    "education_platform": {
+        "patterns": [
+            # Português
+            "plataforma de ensino", "plataforma educacional", "ead", "ensino a distância",
+            "curso online", "cursos online", "plataforma de curso", "sistema de ensino",
+            "lms", "moodle", "educação online", "escola virtual", "universidade virtual",
+            "plataforma de treinamento", "e-learning", "ensino digital", "aula online",
+            "sistema educacional", "portal de ensino", "ambiente virtual de aprendizagem",
+            "ava", "plataforma ead", "fazem plataforma", "vocês fazem plataforma",
+            # English
+            "learning platform", "educational platform", "online course", "e-learning",
+            "lms platform", "training platform", "virtual classroom", "online education",
+            "distance learning", "teaching platform", "course management",
+            # Spanish
+            "plataforma educativa", "educación en línea", "aula virtual", "cursos virtuales",
+            "plataforma de formación", "enseñanza digital", "educación a distancia",
+            # Italian
+            "piattaforma educativa", "formazione online", "e-learning", "corsi online",
+            "educazione digitale", "aula virtuale", "formazione a distanza"
+        ],
+        "intent": "education_platform_inquiry",
+        "responses": {
+            "pt-BR": {
+                "response_parts": [
+                    "Sim! 🎓 Desenvolvemos plataformas de ensino completas e personalizadas!",
+                    "Nossa expertise inclui:\n• **AVA (Ambiente Virtual de Aprendizagem)** com videoaulas\n• **Gamificação** e trilhas de aprendizado\n• **Sistema de avaliações** e certificados automáticos\n• **Área do aluno e professor** com dashboards intuitivos",
+                    "Utilizamos tecnologias modernas para garantir:\n✅ Alta performance mesmo com milhares de alunos\n✅ Vídeos otimizados e streaming adaptativo\n✅ App mobile responsivo\n✅ Integrações com Zoom, Google Meet e ferramentas de pagamento",
+                    "**Prazo médio:** 8 a 12 semanas\n**Suporte:** Treinamento completo e manutenção incluída",
+                    "Clique no botão de orçamento para conversarmos sobre seu projeto educacional! 🚀"
+                ],
+                "full_response": """Sim! 🎓 Desenvolvemos plataformas de ensino completas e personalizadas!
+
+Nossa expertise inclui:
+• **AVA (Ambiente Virtual de Aprendizagem)** com videoaulas
+• **Gamificação** e trilhas de aprendizado
+• **Sistema de avaliações** e certificados automáticos
+• **Área do aluno e professor** com dashboards intuitivos
+
+Utilizamos tecnologias modernas para garantir:
+✅ Alta performance mesmo com milhares de alunos
+✅ Vídeos otimizados e streaming adaptativo
+✅ App mobile responsivo
+✅ Integrações com Zoom, Google Meet e ferramentas de pagamento
+
+**Prazo médio:** 8 a 12 semanas
+**Suporte:** Treinamento completo e manutenção incluída
+
+Clique no botão de orçamento para conversarmos sobre seu projeto educacional! 🚀"""
+            },
+            "en": {
+                "response_parts": [
+                    "Yes! 🎓 We develop complete and customized educational platforms!",
+                    "Our expertise includes:\n• **LMS (Learning Management System)** with video lessons\n• **Gamification** and learning paths\n• **Assessment system** and automatic certificates\n• **Student and teacher portals** with intuitive dashboards",
+                    "We use modern technologies to ensure:\n✅ High performance even with thousands of students\n✅ Optimized videos and adaptive streaming\n✅ Responsive mobile app\n✅ Integrations with Zoom, Google Meet, and payment tools",
+                    "**Average timeline:** 8 to 12 weeks\n**Support:** Complete training and maintenance included",
+                    "Click the quote button to discuss your educational project! 🚀"
+                ],
+                "full_response": """Yes! 🎓 We develop complete and customized educational platforms!
+
+Our expertise includes:
+• **LMS (Learning Management System)** with video lessons
+• **Gamification** and learning paths
+• **Assessment system** and automatic certificates
+• **Student and teacher portals** with intuitive dashboards
+
+We use modern technologies to ensure:
+✅ High performance even with thousands of students
+✅ Optimized videos and adaptive streaming
+✅ Responsive mobile app
+✅ Integrations with Zoom, Google Meet, and payment tools
+
+**Average timeline:** 8 to 12 weeks
+**Support:** Complete training and maintenance included
+
+Click the quote button to discuss your educational project! 🚀"""
+            },
+            "es": {
+                "response_parts": [
+                    "¡Sí! 🎓 ¡Desarrollamos plataformas educativas completas y personalizadas!",
+                    "Nuestra experiencia incluye:\n• **LMS (Sistema de Gestión de Aprendizaje)** con videoclases\n• **Gamificación** y rutas de aprendizaje\n• **Sistema de evaluaciones** y certificados automáticos\n• **Portal de estudiantes y profesores** con paneles intuitivos",
+                    "Usamos tecnologías modernas para garantizar:\n✅ Alto rendimiento incluso con miles de estudiantes\n✅ Videos optimizados y streaming adaptativo\n✅ App móvil responsive\n✅ Integraciones con Zoom, Google Meet y herramientas de pago",
+                    "**Plazo promedio:** 8 a 12 semanas\n**Soporte:** Capacitación completa y mantenimiento incluido",
+                    "¡Haz clic en el botón de cotización para hablar sobre tu proyecto educativo! 🚀"
+                ],
+                "full_response": """¡Sí! 🎓 ¡Desarrollamos plataformas educativas completas y personalizadas!
+
+Nuestra experiencia incluye:
+• **LMS (Sistema de Gestión de Aprendizaje)** con videoclases
+• **Gamificación** y rutas de aprendizaje
+• **Sistema de evaluaciones** y certificados automáticos
+• **Portal de estudiantes y profesores** con paneles intuitivos
+
+Usamos tecnologías modernas para garantizar:
+✅ Alto rendimiento incluso con miles de estudiantes
+✅ Videos optimizados y streaming adaptativo
+✅ App móvil responsive
+✅ Integraciones con Zoom, Google Meet y herramientas de pago
+
+**Plazo promedio:** 8 a 12 semanas
+**Soporte:** Capacitación completa y mantenimiento incluido
+
+¡Haz clic en el botón de cotización para hablar sobre tu proyecto educativo! 🚀"""
+            },
+            "it": {
+                "response_parts": [
+                    "Sì! 🎓 Sviluppiamo piattaforme educative complete e personalizzate!",
+                    "La nostra esperienza include:\n• **LMS (Learning Management System)** con videolezioni\n• **Gamification** e percorsi di apprendimento\n• **Sistema di valutazione** e certificati automatici\n• **Portale studenti e insegnanti** con dashboard intuitive",
+                    "Utilizziamo tecnologie moderne per garantire:\n✅ Alte prestazioni anche con migliaia di studenti\n✅ Video ottimizzati e streaming adattivo\n✅ App mobile responsive\n✅ Integrazioni con Zoom, Google Meet e strumenti di pagamento",
+                    "**Tempi medi:** 8-12 settimane\n**Supporto:** Formazione completa e manutenzione inclusa",
+                    "Clicca sul pulsante preventivo per discutere del tuo progetto educativo! 🚀"
+                ],
+                "full_response": """Sì! 🎓 Sviluppiamo piattaforme educative complete e personalizzate!
+
+La nostra esperienza include:
+• **LMS (Learning Management System)** con videolezioni
+• **Gamification** e percorsi di apprendimento
+• **Sistema di valutazione** e certificati automatici
+• **Portale studenti e insegnanti** con dashboard intuitive
+
+Utilizziamo tecnologie moderne per garantire:
+✅ Alte prestazioni anche con migliaia di studenti
+✅ Video ottimizzati e streaming adattivo
+✅ App mobile responsive
+✅ Integrazioni con Zoom, Google Meet e strumenti di pagamento
+
+**Tempi medi:** 8-12 settimane
+**Supporto:** Formazione completa e manutenzione inclusa
+
+Clicca sul pulsante preventivo per discutere del tuo progetto educativo! 🚀"""
+            }
+        }
+    },
+    "ecommerce": {
+        "patterns": [
+            # Português
+            "loja virtual", "loja online", "e-commerce", "ecommerce", "vender online",
+            "site de vendas", "marketplace", "carrinho de compras", "loja digital",
+            "comércio eletrônico", "venda pela internet", "shopify", "woocommerce",
+            "magento", "opencart", "prestashop", "fazem loja", "criar loja",
+            # English
+            "online store", "online shop", "webshop", "shopping cart", "sell online",
+            "digital store", "marketplace platform", "ecommerce site",
+            # Spanish
+            "tienda virtual", "tienda online", "comercio electrónico", "vender en línea",
+            "carrito de compras", "tienda digital",
+            # Italian
+            "negozio online", "commercio elettronico", "vendere online", "carrello",
+            "negozio virtuale", "e-commerce"
+        ],
+        "intent": "ecommerce_inquiry",
+        "responses": {
+            "pt-BR": {
+                "response_parts": [
+                    "Sim! 🛒 Criamos lojas virtuais completas e otimizadas para vender muito!",
+                    "**Recursos incluídos:**\n• Catálogo ilimitado de produtos\n• Checkout seguro e rápido\n• Integração com Mercado Pago, PagSeguro, Stripe\n• Gestão de estoque automática\n• Cálculo de frete em tempo real",
+                    "**Diferenciais WB:**\n🚀 Carregamento ultrarrápido\n📱 Mobile-first (70% das vendas vêm do celular!)\n🔍 SEO otimizado para Google\n📊 Dashboard com métricas de vendas",
+                    "**Investimento:** A partir de R$ 12.000\n**Prazo:** 6 a 10 semanas",
+                    "Solicite um orçamento e comece a vender online profissionalmente! 💰"
+                ],
+                "full_response": """Sim! 🛒 Criamos lojas virtuais completas e otimizadas para vender muito!
+
+**Recursos incluídos:**
+• Catálogo ilimitado de produtos
+• Checkout seguro e rápido
+• Integração com Mercado Pago, PagSeguro, Stripe
+• Gestão de estoque automática
+• Cálculo de frete em tempo real
+
+**Diferenciais WB:**
+🚀 Carregamento ultrarrápido
+📱 Mobile-first (70% das vendas vêm do celular!)
+🔍 SEO otimizado para Google
+📊 Dashboard com métricas de vendas
+
+**Investimento:** A partir de R$ 12.000
+**Prazo:** 6 a 10 semanas
+
+Solicite um orçamento e comece a vender online profissionalmente! 💰"""
+            },
+            "en": {
+                "response_parts": [
+                    "Yes! 🛒 We create complete e-commerce stores optimized for high sales!",
+                    "**Included features:**\n• Unlimited product catalog\n• Secure and fast checkout\n• Payment gateway integrations\n• Automatic inventory management\n• Real-time shipping calculation",
+                    "**WB Advantages:**\n🚀 Ultra-fast loading\n📱 Mobile-first (70% of sales from mobile!)\n🔍 SEO optimized for Google\n📊 Sales analytics dashboard",
+                    "**Investment:** From $2,400 USD\n**Timeline:** 6 to 10 weeks",
+                    "Request a quote and start selling online professionally! 💰"
+                ],
+                "full_response": """Yes! 🛒 We create complete e-commerce stores optimized for high sales!
+
+**Included features:**
+• Unlimited product catalog
+• Secure and fast checkout
+• Payment gateway integrations
+• Automatic inventory management
+• Real-time shipping calculation
+
+**WB Advantages:**
+🚀 Ultra-fast loading
+📱 Mobile-first (70% of sales from mobile!)
+🔍 SEO optimized for Google
+📊 Sales analytics dashboard
+
+**Investment:** From $2,400 USD
+**Timeline:** 6 to 10 weeks
+
+Request a quote and start selling online professionally! 💰"""
+            }
+        }
+    },
+    "automation": {
+        "patterns": [
+            # Português
+            "automação", "automatizar", "integração", "api", "webhook", "zapier",
+            "make", "integromat", "n8n", "processo automático", "robotizar",
+            "automatização", "sistema integrado", "conectar sistemas", "workflow",
+            "fluxo automático", "bot", "chatbot", "assistente virtual",
+            # English
+            "automation", "automate", "integration", "workflow automation",
+            "process automation", "system integration", "connect apps",
+            # Spanish
+            "automatización", "automatizar", "integración de sistemas", "flujo automático",
+            # Italian
+            "automazione", "automatizzare", "integrazione", "flusso automatico"
+        ],
+        "intent": "automation_inquiry",
+        "responses": {
+            "pt-BR": {
+                "response_parts": [
+                    "Sim! ⚙️ Somos especialistas em automação e integrações!",
+                    "**O que automatizamos:**\n• Vendas: Do lead ao pós-venda\n• Marketing: Email, WhatsApp, redes sociais\n• Atendimento: Chatbots inteligentes\n• Gestão: ERP, CRM, planilhas\n• Financeiro: Cobranças, relatórios",
+                    "**Ferramentas que dominamos:**\n✅ n8n, Make, Zapier\n✅ APIs personalizadas\n✅ WhatsApp Business API\n✅ Integrações com +1000 apps",
+                    "**Benefícios:**\n⏰ Economia de 20h/semana\n💰 Redução de 40% em custos operacionais\n🎯 Zero erros manuais",
+                    "Vamos automatizar seu negócio? Clique para um diagnóstico gratuito! 🚀"
+                ],
+                "full_response": """Sim! ⚙️ Somos especialistas em automação e integrações!
+
+**O que automatizamos:**
+• Vendas: Do lead ao pós-venda
+• Marketing: Email, WhatsApp, redes sociais
+• Atendimento: Chatbots inteligentes
+• Gestão: ERP, CRM, planilhas
+• Financeiro: Cobranças, relatórios
+
+**Ferramentas que dominamos:**
+✅ n8n, Make, Zapier
+✅ APIs personalizadas
+✅ WhatsApp Business API
+✅ Integrações com +1000 apps
+
+**Benefícios:**
+⏰ Economia de 20h/semana
+💰 Redução de 40% em custos operacionais
+🎯 Zero erros manuais
+
+Vamos automatizar seu negócio? Clique para um diagnóstico gratuito! 🚀"""
+            },
+            "en": {
+                "response_parts": [
+                    "Yes! ⚙️ We're automation and integration experts!",
+                    "**What we automate:**\n• Sales: From lead to after-sales\n• Marketing: Email, WhatsApp, social media\n• Support: Intelligent chatbots\n• Management: ERP, CRM, spreadsheets\n• Finance: Billing, reports",
+                    "**Tools we master:**\n✅ n8n, Make, Zapier\n✅ Custom APIs\n✅ WhatsApp Business API\n✅ Integrations with +1000 apps",
+                    "**Benefits:**\n⏰ Save 20h/week\n💰 40% reduction in operational costs\n🎯 Zero manual errors",
+                    "Let's automate your business? Click for a free diagnosis! 🚀"
+                ],
+                "full_response": """Yes! ⚙️ We're automation and integration experts!
+
+**What we automate:**
+• Sales: From lead to after-sales
+• Marketing: Email, WhatsApp, social media
+• Support: Intelligent chatbots
+• Management: ERP, CRM, spreadsheets
+• Finance: Billing, reports
+
+**Tools we master:**
+✅ n8n, Make, Zapier
+✅ Custom APIs
+✅ WhatsApp Business API
+✅ Integrations with +1000 apps
+
+**Benefits:**
+⏰ Save 20h/week
+💰 40% reduction in operational costs
+🎯 Zero manual errors
+
+Let's automate your business? Click for a free diagnosis! 🚀"""
+            }
+        }
+    },
+    "services_general": {
+        "patterns": [
+            # Português
+            "quais serviços", "o que vocês fazem", "o que oferecem", "serviços oferecidos",
+            "trabalham com", "vocês fazem", "tipos de serviço", "áreas de atuação",
+            "especialidades", "portfolio", "portfólio", "trabalhos", "projetos",
+            # English
+            "what services", "what do you do", "what you offer", "services offered",
+            "your services", "specialties", "portfolio", "work with",
+            # Spanish
+            "qué servicios", "qué hacen", "qué ofrecen", "servicios ofrecidos",
+            "especialidades", "portafolio", "áreas de trabajo",
+            # Italian
+            "quali servizi", "cosa fate", "cosa offrite", "servizi offerti",
+            "specialità", "portfolio", "aree di lavoro"
+        ],
+        "intent": "services_inquiry",
+        "responses": {
+            "pt-BR": {
+                "response_parts": [
+                    "🚀 Somos especialistas em transformação digital! Nossos principais serviços:",
+                    "**1. Sites & E-commerce** 🌐\nSites institucionais, lojas virtuais, landing pages",
+                    "**2. Automação & Integrações** ⚙️\nProcessos automáticos, chatbots, APIs",
+                    "**3. IA & Machine Learning** 🤖\nAssistentes virtuais, análise de dados, visão computacional",
+                    "**4. Plataformas Educacionais** 🎓\nEAD, LMS, ambientes virtuais de aprendizagem",
+                    "Qual solução mais interessa você? Clique no botão de orçamento! 💡"
+                ],
+                "full_response": """🚀 Somos especialistas em transformação digital! Nossos principais serviços:
+
+**1. Sites & E-commerce** 🌐
+Sites institucionais, lojas virtuais, landing pages
+
+**2. Automação & Integrações** ⚙️
+Processos automáticos, chatbots, APIs
+
+**3. IA & Machine Learning** 🤖
+Assistentes virtuais, análise de dados, visão computacional
+
+**4. Plataformas Educacionais** 🎓
+EAD, LMS, ambientes virtuais de aprendizagem
+
+Qual solução mais interessa você? Clique no botão de orçamento! 💡"""
+            },
+            "en": {
+                "response_parts": [
+                    "🚀 We're digital transformation experts! Our main services:",
+                    "**1. Websites & E-commerce** 🌐\nCorporate sites, online stores, landing pages",
+                    "**2. Automation & Integrations** ⚙️\nAutomated processes, chatbots, APIs",
+                    "**3. AI & Machine Learning** 🤖\nVirtual assistants, data analysis, computer vision",
+                    "**4. Educational Platforms** 🎓\nE-learning, LMS, virtual learning environments",
+                    "Which solution interests you most? Click the quote button! 💡"
+                ],
+                "full_response": """🚀 We're digital transformation experts! Our main services:
+
+**1. Websites & E-commerce** 🌐
+Corporate sites, online stores, landing pages
+
+**2. Automation & Integrations** ⚙️
+Automated processes, chatbots, APIs
+
+**3. AI & Machine Learning** 🤖
+Virtual assistants, data analysis, computer vision
+
+**4. Educational Platforms** 🎓
+E-learning, LMS, virtual learning environments
+
+Which solution interests you most? Click the quote button! 💡"""
+            }
+        }
     }
 }
 
