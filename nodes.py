@@ -113,7 +113,18 @@ async def detect_intent(state: dict) -> dict:
             logging.error(f"Error in intent detection: {e}")
             intent = "inquire_services"  
 
-    return {**state, "intent": intent, "step": "detect_intent"}
+    # Adicionar flag de fast track para perguntas diretas sobre serviços
+    fast_track_patterns = [
+        "plataforma", "ensino", "ead", "curso", "lms", "educacional",
+        "loja virtual", "ecommerce", "e-commerce", "vender online",
+        "automação", "automatizar", "integração", "api", "webhook",
+        "quanto custa", "preço", "valor", "orçamento", "investimento",
+        "quais serviços", "o que fazem", "o que oferecem", "portfolio"
+    ]
+
+    should_fast_track = any(pattern in lower_input for pattern in fast_track_patterns)
+
+    return {**state, "intent": intent, "step": "detect_intent", "fast_track": should_fast_track}
 
 async def retrieve_company_context(state: dict) -> dict:
     """
@@ -289,7 +300,39 @@ async def generate_response(state: dict) -> dict:
         "messages": messages + [{"role": "assistant", "content": reply}],
         "step": "generate_response"
     }
+def needs_revision(state: dict) -> bool:
+    """
+    Determina se a resposta precisa de revisão.
+    Pula revisão para respostas já otimizadas.
+    """
+    response = state.get("response", "")
+
+    # Critérios para PULAR revisão:
+    # 1. Resposta curta e direta (menos de 1000 caracteres)
+    # 2. Não contém informações sensíveis (emails, telefones)
+    # 3. Foi gerada via fast track ou cache
+    # 4. Já está bem formatada
+
+    skip_revision = (
+        len(response) < 1000 and
+        "@" not in response and
+        not re.search(r'\+\d{1,3}[\s\-]?\(?\d{1,4}\)?[\s\-]?\d{1,4}[\s\-]?\d{1,4}', response) and  # No phone numbers
+        not re.search(r'whatsapp|wpp|zap|telefone|celular|ligar', response.lower()) and
+        (state.get("fast_track", False) or state.get("cached", False))
+    )
+
+    return not skip_revision
+
 async def revise_response(state: dict) -> dict:
+    # Verificar se precisa de revisão
+    if not needs_revision(state):
+        logging.info("Skipping revision - response already optimized")
+        return {
+            **state,
+            "revised_response": state["response"],
+            "step": "revision_skipped"
+        }
+
     prompt = (
         "Rewrite the following response to make it clearer and friendlier, keeping a professional tone. "
         "Do NOT include any explanations, introductions, or markdown (like asterisks or hashtags). "

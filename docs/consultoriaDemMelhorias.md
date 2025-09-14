@@ -99,3 +99,52 @@ Médio Prazo (3 meses):
 
 O projeto tem boa fundação mas precisa evoluir significativamente em segurança, testes e features avançadas para ser
 production-ready e competitivo no mercado.
+
+Recomendações Prioritárias
+
+1. Implementar Cache Agressivo (Impacto: -35s)
+
+- Adicionar "plataformas de ensino" ao cached_responses.py
+- Cache para perguntas sobre serviços específicos
+- Resposta em <100ms em vez de 37s
+
+2. Otimizar Fluxo do LangGraph (Impacto: -10s)
+
+- Pular etapa de contexto para perguntas diretas sobre serviços
+
+- Usar detecção de intent mais específica
+- Evitar múltiplas chamadas ao LLM
+
+3. Revisar Prompt de Revisão (Qualidade)
+
+- Reforçar remoção de contatos pessoais
+- Limitar resposta a 3-4 partes máximo
+- Focar em CTA genérico ("clique no botão de orçamento")
+
+4. Implementar Timeout e Fallback (UX)
+
+- Se resposta > 5s, usar resposta pré-definida
+- Mostrar indicador de progresso real
+- Opção de cancelar requisição longa
+
+💡 Solução Recomendada Imediata
+
+Adicionar ao cached_responses.py:
+
+- Padrões para "plataforma", "ensino", "EAD", "curso"
+- Resposta genérica sobre desenvolvimento de plataformas
+- Tempo de resposta: <100ms
+
+Justificativa:
+
+- Cache resolve 80% do problema (tempo)
+- Fácil implementação sem refatorar fluxo
+- Melhora imediata na experiência do usuário
+- Reduz custos com API do DeepSeek
+
+📈 Métricas Esperadas Após Otimização
+
+- Tempo de resposta: <2s (cache) ou <10s (LLM)
+- Partes da mensagem: máximo 4
+- Tempo total de interação: <15s
+- Zero menções a contatos pessoais

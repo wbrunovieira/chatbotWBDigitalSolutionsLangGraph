@@ -32,16 +32,39 @@ workflow.add_edge("generate_off_topic_response", END)
 workflow.set_entry_point("intent_detection")
 
 
+def route_after_intent(state):
+    """
+    Decide o roteamento após detecção de intent.
+    Implementa fast track para perguntas diretas sobre serviços.
+    """
+    intent = state.get("intent", "")
+
+    # Casos especiais que não precisam de contexto
+    if intent == "greeting":
+        return "generate_greeting_response"
+    elif intent == "off_topic":
+        return "generate_off_topic_response"
+    elif intent == "chat_with_agent":
+        return END
+    elif intent == "schedule_meeting":
+        return END
+
+    # Fast track: pula busca de contexto para perguntas diretas
+    if state.get("fast_track", False):
+        return "response_generation"  # Pula direto para geração
+
+    # Fluxo normal: busca contexto
+    return "retrieve_company_context"
+
 workflow.add_conditional_edges(
     "intent_detection",
-    lambda state: state.get("intent", ""),
+    route_after_intent,
     {
-        "greeting": "generate_greeting_response",
-        "off_topic": "generate_off_topic_response",
-        "chat_with_agent": END,
-        "schedule_meeting": END,
-        "inquire_services": "retrieve_company_context",
-        "request_quote": "retrieve_company_context"
+        "generate_greeting_response": "generate_greeting_response",
+        "generate_off_topic_response": "generate_off_topic_response",
+        END: END,
+        "response_generation": "response_generation",  # Fast track
+        "retrieve_company_context": "retrieve_company_context"  # Normal flow
     }
 )
 
