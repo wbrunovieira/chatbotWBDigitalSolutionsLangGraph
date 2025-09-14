@@ -245,9 +245,13 @@ async def generate_response(state: dict) -> dict:
 
     instruction = (
         "Before answering, always make sure to:\n"
-        "Preserve the original language user\'s original language' "
-        "- Ignore typos, missing punctuation, or spacing errors in the user's message.\n"
-        "- Focus on understanding the user's intent as clearly as possible, even if the text is informal or has small issues.\n\n"
+        "- Preserve the user's original language\n"
+        "- Ignore typos, missing punctuation, or spacing errors\n"
+        "- Focus on understanding the user's intent clearly\n"
+        "- Keep responses concise (max 3-4 paragraphs)\n"
+        "- If including contact, use ONE line: 'WhatsApp (11) 98286-4581 - respondemos em 2h!'\n"
+        "- Focus on value and benefits for the customer\n"
+        "- End with a clear next step when appropriate\n\n"
     )
 
 
@@ -334,13 +338,18 @@ async def revise_response(state: dict) -> dict:
         }
 
     prompt = (
-        "Rewrite the following response to make it clearer and friendlier, keeping a professional tone. "
-        "Do NOT include any explanations, introductions, or markdown (like asterisks or hashtags). "
-        "Your output must contain only the final response with natural paragraph spacing. "
-        "Preserve the original language of the response. "
-        "Limit the response to a maximum of 600 characters, ending naturally."
-        "Reply only with the improved text — do not include any extra explanations, titles, or labels like 'Response:'.\n\n"
-        f"{state['response']}"
+        "Rewrite the following response to make it clearer and friendlier, keeping a professional tone.\n"
+        "IMPORTANT RULES:\n"
+        "1. Maximum 3 paragraphs or sections\n"
+        "2. If there's contact info (WhatsApp/email), consolidate in ONE line with a benefit\n"
+        "   Example: 'WhatsApp (11) 98286-4581 - respondemos em até 2h!'\n"
+        "3. Keep the main message focused on value to the customer\n"
+        "4. Maximum 500 characters total\n"
+        "5. Preserve the original language\n"
+        "6. End with a clear call-to-action when appropriate\n"
+        "7. Do NOT fragment contact info into multiple parts\n"
+        "Reply ONLY with the improved text, no explanations.\n\n"
+        f"Original response: {state['response']}"
     )
     try:
         # Adicionar headers de otimização
@@ -544,12 +553,12 @@ async def generate_greeting_response(state: dict) -> dict:
             "Dimmi come posso aiutarti — vuoi un preventivo, informazioni su un servizio, o hai delle domande? 😊"
         )
 
-    else:  
+    else:
         response = (
-            "Olá! 👋 Eu sou o assistente virtual da WB Digital Solutions. "
-            "Ajudamos empresas a crescer com sites rápidos, automações inteligentes e soluções com IA."
+            "Olá! 👋 Sou o assistente da WB Digital Solutions. "
+            "Criamos sites, automações e soluções com IA para empresas crescerem. "
             f"{context_addition} "
-            "Me conta o que você precisa — um orçamento, saber mais sobre algum serviço ou tirar dúvidas? 😊"
+            "Como posso ajudar você hoje? 💬 WhatsApp (11) 98286-4581 - resposta em 2h!"
         )
 
     return {
