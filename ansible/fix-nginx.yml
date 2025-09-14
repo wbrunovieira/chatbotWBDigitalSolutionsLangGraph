@@ -1,0 +1,154 @@
+---
+- name: Fix Nginx and SSL Setup
+  hosts: chatbot_server
+  become: yes
+
+  tasks:
+    - name: Fix Docker APT repository conflict
+      shell: |
+        rm -f /etc/apt/sources.list.d/docker.list
+        rm -f /etc/apt/sources.list.d/docker.list.save
+        apt-get update --fix-missing
+      ignore_errors: yes
+
+    - name: Update APT cache properly
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      ignore_errors: yes
+
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+      ignore_errors: yes
+
+    - name: Check if Nginx is already installed
+      command: which nginx
+      register: nginx_installed
+      ignore_errors: yes
+
+    - name: Install Nginx via alternative method if needed
+      shell: |
+        apt-get install -y nginx
+      when: nginx_installed.rc != 0
+      ignore_errors: yes
+
+    - name: Install Certbot and Python3 Certbot Nginx
+      apt:
+        name:
+          - certbot
+          - python3-certbot-nginx
+        state: present
+      ignore_errors: yes
+
+    - name: Configure Nginx for chatbot (with CORS)
+      copy:
+        content: |
+          upstream chatbot_backend {
+              server localhost:{{ app_port | default(8001) }};
+          }
+
+          server {
+              listen 80;
+              server_name {{ chatbot_domain | default('chatbot.wbdigitalsolutions.com') }};
+
+              # Handle preflight OPTIONS requests
+              location / {
+                  if ($request_method = 'OPTIONS') {
+                      add_header 'Access-Control-Allow-Origin' '$http_origin' always;
+                      add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
+                      add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
+                      add_header 'Access-Control-Allow-Credentials' 'true' always;
+                      add_header 'Access-Control-Max-Age' 3600 always;
+                      add_header 'Content-Type' 'text/plain; charset=utf-8';
+                      add_header 'Content-Length' 0;
+                      return 204;
+                  }
+
+                  proxy_pass http://chatbot_backend;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection "upgrade";
+                  proxy_connect_timeout 60s;
+                  proxy_send_timeout 60s;
+                  proxy_read_timeout 60s;
+                  client_max_body_size 10M;
+
+                  # Pass CORS headers from upstream
+                  proxy_pass_header Access-Control-Allow-Origin;
+                  proxy_pass_header Access-Control-Allow-Methods;
+                  proxy_pass_header Access-Control-Allow-Headers;
+                  proxy_pass_header Access-Control-Allow-Credentials;
+              }
+
+              location /health {
+                  proxy_pass http://chatbot_backend/health;
+                  access_log off;
+              }
+          }
+        dest: /etc/nginx/sites-available/chatbot.conf
+        mode: '0644'
+
+    - name: Enable Nginx site
+      file:
+        src: /etc/nginx/sites-available/chatbot.conf
+        dest: /etc/nginx/sites-enabled/chatbot.conf
+        state: link
+      ignore_errors: yes
+
+    - name: Test Nginx configuration
+      command: nginx -t
+      register: nginx_test
+      ignore_errors: yes
+
+    - name: Reload Nginx
+      systemd:
+        name: nginx
+        state: reloaded
+      when: nginx_test.rc == 0
+      ignore_errors: yes
+
+    - name: Restart Nginx if reload failed
+      systemd:
+        name: nginx
+        state: restarted
+      when: nginx_test.rc != 0
+      ignore_errors: yes
+
+    - name: Check if SSL certificate exists
+      stat:
+        path: /etc/letsencrypt/live/{{ chatbot_domain | default('chatbot.wbdigitalsolutions.com') }}/fullchain.pem
+      register: ssl_cert
+
+    - name: Obtain SSL certificate if not exists
+      command: |
+        certbot --nginx -n --agree-tos --email {{ ssl_email | default('contato@wbdigitalsolutions.com') }}
+        -d {{ chatbot_domain | default('chatbot.wbdigitalsolutions.com') }}
+        --redirect
+      when: not ssl_cert.stat.exists
+      ignore_errors: yes
+
+    - name: Test chatbot endpoint
+      uri:
+        url: "http://localhost:{{ app_port | default(8001) }}/health"
+        status_code: 200
+      register: health_check
+      ignore_errors: yes
+
+    - name: Display status
+      debug:
+        msg:
+          - "=========================================="
+          - "Nginx Configuration Status:"
+          - "Nginx installed: {{ 'Yes' if nginx_installed.rc == 0 else 'Manual check required' }}"
+          - "SSL Certificate: {{ 'Installed' if ssl_cert.stat.exists else 'Check manually' }}"
+          - "App Health: {{ 'OK' if health_check.status == 200 else 'Check required' }}"
+          - "=========================================="
+          - "Test the API:"
+          - "curl https://{{ chatbot_domain | default('chatbot.wbdigitalsolutions.com') }}/health"
+          - "=========================================="
