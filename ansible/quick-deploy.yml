@@ -1,0 +1,87 @@
+---
+# Quick deploy: git pull → rebuild → restart
+# Usage: cd ansible && ansible-playbook -i inventory.ini quick-deploy.yml
+- name: Quick deploy Chatbot
+  hosts: chatbot_server
+  gather_facts: false
+
+  vars:
+    app_dir: /root/chatbot
+    repo_url: https://github.com/wbrunovieira/chatbotWBDigitalSolutionsLangGraph.git
+    git_branch: main
+    compose_file: docker-compose.yml
+
+  tasks:
+    - name: Check if git repo exists
+      raw: test -d {{ app_dir }}/.git && echo "YES" || echo "NO"
+      register: git_exists
+      changed_when: false
+
+    - name: Initialize git clone (first time only)
+      raw: |
+        cd {{ app_dir }} && \
+        git init && \
+        git remote add origin {{ repo_url }} && \
+        git fetch origin {{ git_branch }} && \
+        git checkout -f {{ git_branch }} 2>&1
+      when: "'NO' in git_exists.stdout"
+      register: git_init_result
+
+    - name: Show git init output
+      raw: echo "{{ git_init_result.stdout_lines | default(['skipped']) | join('\n') }}"
+      when: git_init_result is not skipped
+      changed_when: false
+
+    - name: Pull latest code
+      raw: |
+        cd {{ app_dir }} && git fetch origin {{ git_branch }} && git reset --hard origin/{{ git_branch }} 2>&1
+      register: git_result
+
+    - name: Show git changes
+      raw: echo "{{ git_result.stdout_lines | default(['no output']) | join('\n') }}"
+      changed_when: false
+
+    - name: Restore .env (git pull may remove it)
+      raw: |
+        if [ ! -f {{ app_dir }}/.env ]; then
+          echo "Restoring .env from backup..."
+          cp {{ app_dir }}/.env.bak {{ app_dir }}/.env 2>/dev/null || echo "No .env backup found"
+        else
+          echo ".env intact"
+          cp {{ app_dir }}/.env {{ app_dir }}/.env.bak
+        fi
+      changed_when: false
+
+    - name: Rebuild and restart chatbot container
+      raw: |
+        cd {{ app_dir }} && docker compose -f {{ compose_file }} up -d --build chatbot 2>&1
+      register: compose_result
+
+    - name: Show compose output
+      raw: echo "{{ compose_result.stdout_lines | default(['no output']) | join('\n') }}"
+      changed_when: false
+
+    - name: Restart qdrant and redis (pick up healthcheck changes)
+      raw: |
+        cd {{ app_dir }} && docker compose -f {{ compose_file }} up -d qdrant redis-chatbot 2>&1
+      register: infra_result
+
+    - name: Show infra output
+      raw: echo "{{ infra_result.stdout_lines | default(['no output']) | join('\n') }}"
+      changed_when: false
+
+    - name: Wait for containers to stabilize
+      raw: sleep 15
+      changed_when: false
+
+    - name: Health check — all services
+      raw: |
+        echo "chatbot_app:   $(curl -sf -o /dev/null -w '%{http_code}' http://127.0.0.1:8001/health || echo 'DOWN')"
+        echo "chatbot_qdrant: $(curl -sf -o /dev/null -w '%{http_code}' http://127.0.0.1:6333/readyz || echo 'DOWN')"
+        echo "chatbot_redis:  $(docker exec chatbot_redis redis-cli ping 2>/dev/null || echo 'DOWN')"
+      changed_when: false
+
+    - name: Show container status
+      raw: |
+        cd {{ app_dir }} && docker compose -f {{ compose_file }} ps --format "table {% raw %}{{.Name}}\t{{.Status}}{% endraw %}" 2>/dev/null || docker compose -f {{ compose_file }} ps
+      changed_when: false
