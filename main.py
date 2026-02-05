@@ -17,7 +17,7 @@ import time
 import asyncio
 import json as json_lib
 from deepseek_optimizer import DeepSeekOptimizer
-from langfuse_client import create_trace, update_trace, flush_langfuse
+from langfuse_client import create_trace, update_trace, flush_langfuse, evaluate_response, score_trace
 
 load_dotenv()
 
@@ -241,6 +241,20 @@ async def chat(request: Request):
         output={"response": full_response, "intent": result.get("intent")},
         metadata={"final_step": result.get("step"), "cached": False},
     )
+
+    # Run evaluation asynchronously (non-blocking)
+    # Only evaluate non-cached responses that went through LLM
+    if langfuse_trace and result.get("step") not in ["cached_response", "revision_skipped"]:
+        try:
+            await evaluate_response(
+                trace=langfuse_trace,
+                user_input=user_input,
+                response=full_response,
+                intent=result.get("intent", "unknown"),
+                llm_client=True,  # Enable LLM evaluation
+            )
+        except Exception as e:
+            logging.warning(f"Evaluation failed: {e}")
 
     await set_cached_response(cache_key, response_data)
 

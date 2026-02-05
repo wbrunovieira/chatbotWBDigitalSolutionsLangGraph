@@ -10,7 +10,7 @@ from config import DEEPSEEK_API_KEY
 from sentence_transformers import SentenceTransformer
 from langdetect import detect
 from deepseek_optimizer import DeepSeekOptimizer, estimate_tokens, should_skip_api_call
-from langfuse_client import log_llm_generation
+from langfuse_client import log_llm_generation, get_prompt, evaluate_response, score_trace
 
 
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -54,32 +54,20 @@ async def detect_intent(state: dict) -> dict:
     elif any(p in lower_input for p in ["ver serviços", "quais serviços", "serviços disponíveis"]):
         intent = "inquire_services"
     else:
+        # Get prompt from Langfuse (with local fallback)
+        intent_prompt = get_prompt("detect_intent")
+        if intent_prompt:
+            prompt = intent_prompt.compile(user_input=user_input)
+        else:
+            # Hardcoded fallback if no prompt available
+            prompt = f"""Analyze this message and determine if it's related to business/technology services or not.
 
-        prompt = f"""
-        Analyze this message and determine if it's related to business/technology services or not.
-        
-        Context: WB Digital Solutions provides websites, automation, and AI solutions for businesses.
-        
-        Message: "{user_input}"
-        
-        Question: Is this message asking about business services, technology, websites, automation, AI, pricing, or contacting the company?
-        
-        If YES (related to business/tech): determine the specific intent:
-        - "greeting" if just saying hello
-        - "inquire_services" if asking about services
-        - "request_quote" if asking about prices
-        - "chat_with_agent" if wants human contact
-        - "schedule_meeting" if wants to schedule
-        
-        If NO (NOT related): return "off_topic"
-        
-        Examples:
-        - "What is the capital of Brazil?" → off_topic
-        - "How much for a website?" → request_quote
-        - "What services do you offer?" → inquire_services
-        
-        Return ONLY the intent word, nothing else:
-        """
+Context: WB Digital Solutions provides websites, automation, and AI solutions for businesses.
+
+Message: "{user_input}"
+
+Return ONLY the intent word: greeting, inquire_services, request_quote, chat_with_agent, schedule_meeting, or off_topic"""
+
         try:
             # Adicionar headers de otimização
             optimization_headers = DeepSeekOptimizer.get_optimization_headers()
@@ -123,10 +111,12 @@ async def detect_intent(state: dict) -> dict:
                         output_content=raw_intent,
                         usage=usage,
                         metadata={"temperature": 0.1, "detected_intent": intent},
+                        prompt=intent_prompt if intent_prompt else None,
                     )
         except Exception as e:
             logging.error(f"Error in intent detection: {e}")
-            intent = "inquire_services"  
+            intent = "inquire_services"
+            intent_prompt = None  
 
     # Adicionar flag de fast track para perguntas diretas sobre serviços
     fast_track_patterns = [
@@ -257,18 +247,17 @@ async def generate_response(state: dict) -> dict:
     user_input = state["user_input"]
     augmented_input = state.get("augmented_input")
 
-
-    instruction = (
-        "Before answering, always make sure to:\n"
-        "- Preserve the user's original language\n"
-        "- Ignore typos, missing punctuation, or spacing errors\n"
-        "- Focus on understanding the user's intent clearly\n"
-        "- Keep responses concise (max 3-4 paragraphs)\n"
-        "- If including contact, use ONE line: 'WhatsApp (11) 98286-4581 - respondemos em 2h!'\n"
-        "- Focus on value and benefits for the customer\n"
-        "- End with a clear next step when appropriate\n\n"
-    )
-
+    # Get instruction prompt from Langfuse
+    instruction_prompt = get_prompt("generate_response_instruction")
+    if instruction_prompt:
+        instruction = instruction_prompt.compile() + "\n\n"
+    else:
+        instruction = (
+            "Before answering, always make sure to:\n"
+            "- Preserve the user's original language\n"
+            "- Keep responses concise (max 3-4 paragraphs)\n"
+            "- If including contact, use ONE line: 'WhatsApp (11) 98286-4581 - respondemos em 2h!'\n\n"
+        )
 
     query = f"{instruction}{augmented_input}" if augmented_input else f"{instruction}{user_input}"
 
@@ -324,13 +313,15 @@ async def generate_response(state: dict) -> dict:
             output_content=reply,
             usage=usage,
             metadata={"temperature": 0.7},
+            prompt=instruction_prompt if instruction_prompt else None,
         )
 
     return {
         **state,
         "response": reply,
         "messages": messages + [{"role": "assistant", "content": reply}],
-        "step": "generate_response"
+        "step": "generate_response",
+        "instruction_prompt": instruction_prompt,
     }
 def needs_revision(state: dict) -> bool:
     """
@@ -365,20 +356,17 @@ async def revise_response(state: dict) -> dict:
             "step": "revision_skipped"
         }
 
-    prompt = (
-        "Rewrite the following response to make it clearer and friendlier, keeping a professional tone.\n"
-        "IMPORTANT RULES:\n"
-        "1. Maximum 3 paragraphs or sections\n"
-        "2. If there's contact info (WhatsApp/email), consolidate in ONE line with a benefit\n"
-        "   Example: 'WhatsApp (11) 98286-4581 - respondemos em até 2h!'\n"
-        "3. Keep the main message focused on value to the customer\n"
-        "4. Maximum 500 characters total\n"
-        "5. Preserve the original language\n"
-        "6. End with a clear call-to-action when appropriate\n"
-        "7. Do NOT fragment contact info into multiple parts\n"
-        "Reply ONLY with the improved text, no explanations.\n\n"
-        f"Original response: {state['response']}"
-    )
+    # Get revision prompt from Langfuse
+    revise_prompt = get_prompt("revise_response")
+    if revise_prompt:
+        prompt = revise_prompt.compile(response=state["response"])
+    else:
+        prompt = (
+            "Rewrite the following response to make it clearer and friendlier, keeping a professional tone.\n"
+            "Maximum 500 characters. Preserve the original language.\n"
+            "Reply ONLY with the improved text.\n\n"
+            f"Original response: {state['response']}"
+        )
     try:
         # Adicionar headers de otimização
         optimization_headers = DeepSeekOptimizer.get_optimization_headers()
@@ -429,6 +417,7 @@ async def revise_response(state: dict) -> dict:
             output_content=revised,
             usage=usage,
             metadata={"temperature": 0.5},
+            prompt=revise_prompt if revise_prompt else None,
         )
 
     revised = revised.replace('\n\n', '\n').replace('\n', '\n\n')
