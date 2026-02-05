@@ -10,6 +10,7 @@ from config import DEEPSEEK_API_KEY
 from sentence_transformers import SentenceTransformer
 from langdetect import detect
 from deepseek_optimizer import DeepSeekOptimizer, estimate_tokens, should_skip_api_call
+from langfuse_client import log_llm_generation
 
 
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -98,7 +99,7 @@ async def detect_intent(state: dict) -> dict:
                     }
                 )
                 data = response.json()
-                
+
                 # Rastrear uso de tokens
                 usage = data.get("usage", {})
                 if usage:
@@ -107,9 +108,22 @@ async def detect_intent(state: dict) -> dict:
                         output_tokens=usage.get("completion_tokens", 0),
                         cache_hit=response.headers.get("X-Cache-Status") == "hit"
                     )
-                
+
                 raw_intent = data["choices"][0]["message"]["content"].strip().lower()
                 intent = raw_intent if raw_intent in {"greeting", "request_quote", "inquire_services", "chat_with_agent", "schedule_meeting", "off_topic"} else "inquire_services"
+
+                # Log to Langfuse
+                trace = state.get("langfuse_trace")
+                if trace:
+                    log_llm_generation(
+                        trace=trace,
+                        name="detect_intent",
+                        model="deepseek-chat",
+                        input_messages=[{"role": "user", "content": prompt}],
+                        output_content=raw_intent,
+                        usage=usage,
+                        metadata={"temperature": 0.1, "detected_intent": intent},
+                    )
         except Exception as e:
             logging.error(f"Error in intent detection: {e}")
             intent = "inquire_services"  
@@ -287,7 +301,7 @@ async def generate_response(state: dict) -> dict:
         }
 
     data = response.json()
-    
+
     # Rastrear uso de tokens
     usage = data.get("usage", {})
     if usage:
@@ -296,8 +310,21 @@ async def generate_response(state: dict) -> dict:
             output_tokens=usage.get("completion_tokens", 0),
             cache_hit=response.headers.get("X-Cache-Status") == "hit"
         )
-    
+
     reply = data["choices"][0]["message"]["content"]
+
+    # Log to Langfuse
+    trace = state.get("langfuse_trace")
+    if trace:
+        log_llm_generation(
+            trace=trace,
+            name="generate_response",
+            model="deepseek-chat",
+            input_messages=messages,
+            output_content=reply,
+            usage=usage,
+            metadata={"temperature": 0.7},
+        )
 
     return {
         **state,
@@ -379,7 +406,7 @@ async def revise_response(state: dict) -> dict:
         }
     
     data = response.json()
-    
+
     # Rastrear uso de tokens
     usage = data.get("usage", {})
     if usage:
@@ -388,9 +415,23 @@ async def revise_response(state: dict) -> dict:
             output_tokens=usage.get("completion_tokens", 0),
             cache_hit=response.headers.get("X-Cache-Status") == "hit"
         )
-    
+
     revised = data["choices"][0]["message"]["content"]
-    revised = revised.replace('\n\n', '\n').replace('\n', '\n\n') 
+
+    # Log to Langfuse
+    trace = state.get("langfuse_trace")
+    if trace:
+        log_llm_generation(
+            trace=trace,
+            name="revise_response",
+            model="deepseek-chat",
+            input_messages=[{"role": "user", "content": prompt}],
+            output_content=revised,
+            usage=usage,
+            metadata={"temperature": 0.5},
+        )
+
+    revised = revised.replace('\n\n', '\n').replace('\n', '\n\n')
     return {**state, "revised_response": revised, "step": "revise_response"}
 
 async def save_log_qdrant(state: dict) -> dict:

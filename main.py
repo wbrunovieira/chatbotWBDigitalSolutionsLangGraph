@@ -9,7 +9,7 @@ import os
 import logging
 from dotenv import load_dotenv
 from config import QDRANT_HOST, QDRANT_API_KEY
-from nodes import compute_embedding  
+from nodes import compute_embedding
 from cache import get_cached_response, set_cached_response
 from cached_responses import detect_cached_intent
 from hashlib import sha256
@@ -17,10 +17,17 @@ import time
 import asyncio
 import json as json_lib
 from deepseek_optimizer import DeepSeekOptimizer
+from langfuse_client import create_trace, update_trace, flush_langfuse
 
 load_dotenv()
 
 app = FastAPI()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Flush Langfuse on app shutdown."""
+    flush_langfuse()
 
 # CORS configuration - permitir apenas domínios específicos
 app.add_middleware(
@@ -166,6 +173,15 @@ async def chat(request: Request):
     else:
         page_context = "O usuário está na página inicial"
 
+    # Create Langfuse trace for this chat interaction
+    langfuse_trace = create_trace(
+        name="chatbot-interaction",
+        user_id=user_id,
+        session_id=user_id,
+        input_data={"message": user_input, "language": language, "current_page": current_page},
+        metadata={"page_url": page_url, "page_context": page_context},
+    )
+
     state = {
         "user_input": user_input,
         "user_id": user_id,
@@ -180,7 +196,8 @@ async def chat(request: Request):
             "language": language,
             "current_page": current_page
         },
-        "qdrant_client": qdrant
+        "qdrant_client": qdrant,
+        "langfuse_trace": langfuse_trace,
     }
 
     result = await graph.ainvoke(state)
@@ -218,6 +235,12 @@ async def chat(request: Request):
         "cached": False
     }
 
+    # Update Langfuse trace with final output
+    update_trace(
+        langfuse_trace,
+        output={"response": full_response, "intent": result.get("intent")},
+        metadata={"final_step": result.get("step"), "cached": False},
+    )
 
     await set_cached_response(cache_key, response_data)
 
