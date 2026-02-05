@@ -26,8 +26,8 @@ workflow.add_node("response_revision", revise_response)
 workflow.add_node("log_saving", save_log_qdrant)
 workflow.add_node("generate_greeting_response", generate_greeting_response)
 workflow.add_node("generate_off_topic_response", generate_off_topic_response)
-workflow.add_edge("generate_greeting_response", END)
-workflow.add_edge("generate_off_topic_response", END)
+workflow.add_edge("generate_greeting_response", "log_saving")
+workflow.add_edge("generate_off_topic_response", "log_saving")
 
 workflow.set_entry_point("intent_detection")
 

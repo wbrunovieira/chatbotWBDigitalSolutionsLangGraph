@@ -2,6 +2,7 @@
 import httpx
 import re
 import time
+import uuid
 import logging
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import VectorParams, Distance
@@ -399,11 +400,11 @@ async def save_log_qdrant(state: dict) -> dict:
         "response": state.get("response"),
         "revised_response": state.get("revised_response"),
         "intent": state.get("intent"),
-        "messages": state.get("messages")
+        "language": state.get("language"),
+        "current_page": state.get("current_page"),
+        "timestamp": int(time.time()),
     }
     logging.info("Saving to Qdrant: %s", data_to_save)
-    print("Data sent to Qdrant:", data_to_save)
-    
 
     combined_text = (
         f"User ID: {data_to_save.get('user_id', '')}\n"
@@ -412,9 +413,9 @@ async def save_log_qdrant(state: dict) -> dict:
         f"Revised Response: {data_to_save.get('revised_response', '')}\n"
         f"Intent: {data_to_save.get('intent', '')}"
     )
-    log_embedding = compute_embedding(combined_text)  
+    log_embedding = compute_embedding(combined_text)
     point = {
-        "id": int(time.time()),
+        "id": str(uuid.uuid4()),
         "vector": log_embedding,
         "payload": data_to_save,
     }
@@ -426,7 +427,7 @@ async def save_log_qdrant(state: dict) -> dict:
         logging.info("Log saved to Qdrant successfully.")
     except Exception as e:
         logging.error("Error saving log to Qdrant: %s", e)
-    
+
     return state
 
 

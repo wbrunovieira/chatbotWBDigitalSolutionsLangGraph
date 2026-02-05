@@ -24,7 +24,7 @@ services:
     networks:
       - {{ docker_network }}
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6333/readyz"]
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/6333 || exit 1'"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -66,7 +66,7 @@ services:
     ports:
       - "{{ app_port }}:8000"
     environment:
-      - DEEPSEEK_API_KEY={{ deepseek_api_key }}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - QDRANT_HOST=http://chatbot_qdrant:6333
       - QDRANT_API_KEY=
       - REDIS_HOST=redis-chatbot
