@@ -12,24 +12,32 @@
     compose_file: docker-compose.yml
 
   tasks:
+    - name: Ensure git safe.directory
+      raw: git config --global --add safe.directory {{ app_dir }}
+      changed_when: false
+
+    - name: Backup .env before git operations
+      raw: cp {{ app_dir }}/.env {{ app_dir }}/.env.bak 2>/dev/null; echo "ok"
+      changed_when: false
+
     - name: Check if git repo exists
       raw: test -d {{ app_dir }}/.git && echo "YES" || echo "NO"
       register: git_exists
       changed_when: false
 
-    - name: Initialize git clone (first time only)
+    - name: Clone repo (first time only)
       raw: |
-        cd {{ app_dir }} && \
-        git init && \
-        git remote add origin {{ repo_url }} && \
-        git fetch origin {{ git_branch }} && \
-        git checkout -f {{ git_branch }} 2>&1
+        tmp=$(mktemp -d) && \
+        git clone --branch {{ git_branch }} {{ repo_url }} "$tmp" && \
+        mv "$tmp/.git" {{ app_dir }}/.git && \
+        rm -rf "$tmp" && \
+        cd {{ app_dir }} && git reset --hard origin/{{ git_branch }} 2>&1
       when: "'NO' in git_exists.stdout"
-      register: git_init_result
+      register: git_clone_result
 
-    - name: Show git init output
-      raw: echo "{{ git_init_result.stdout_lines | default(['skipped']) | join('\n') }}"
-      when: git_init_result is not skipped
+    - name: Show clone output
+      raw: echo "{{ git_clone_result.stdout_lines | default(['skipped']) | join('\n') }}"
+      when: git_clone_result is not skipped
       changed_when: false
 
     - name: Pull latest code
@@ -41,15 +49,10 @@
       raw: echo "{{ git_result.stdout_lines | default(['no output']) | join('\n') }}"
       changed_when: false
 
-    - name: Restore .env (git pull may remove it)
+    - name: Restore .env
       raw: |
-        if [ ! -f {{ app_dir }}/.env ]; then
-          echo "Restoring .env from backup..."
-          cp {{ app_dir }}/.env.bak {{ app_dir }}/.env 2>/dev/null || echo "No .env backup found"
-        else
-          echo ".env intact"
-          cp {{ app_dir }}/.env {{ app_dir }}/.env.bak
-        fi
+        cp {{ app_dir }}/.env.bak {{ app_dir }}/.env 2>/dev/null
+        echo ".env restored"
       changed_when: false
 
     - name: Rebuild and restart chatbot container
@@ -76,7 +79,7 @@
 
     - name: Health check — all services
       raw: |
-        echo "chatbot_app:   $(curl -sf -o /dev/null -w '%{http_code}' http://127.0.0.1:8001/health || echo 'DOWN')"
+        echo "chatbot_app:    $(curl -sf -o /dev/null -w '%{http_code}' http://127.0.0.1:8001/health || echo 'DOWN')"
         echo "chatbot_qdrant: $(curl -sf -o /dev/null -w '%{http_code}' http://127.0.0.1:6333/readyz || echo 'DOWN')"
         echo "chatbot_redis:  $(docker exec chatbot_redis redis-cli ping 2>/dev/null || echo 'DOWN')"
       changed_when: false
