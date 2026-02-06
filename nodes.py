@@ -10,7 +10,7 @@ from config import DEEPSEEK_API_KEY
 from sentence_transformers import SentenceTransformer
 from langdetect import detect
 from deepseek_optimizer import DeepSeekOptimizer, estimate_tokens, should_skip_api_call
-from langfuse_client import log_llm_generation, get_prompt, evaluate_response, score_trace
+from langfuse_client import start_llm_generation, end_llm_generation, get_prompt, evaluate_response, score_trace
 
 
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -58,10 +58,20 @@ async def detect_intent(state: dict) -> dict:
 Return ONLY: greeting, inquire_services, request_quote, chat_with_agent, share_contact, or off_topic"""
 
     intent = "inquire_services"  # default
-    intent_prompt_used = intent_prompt
+    trace = state.get("langfuse_trace")
 
     try:
         optimization_headers = DeepSeekOptimizer.get_optimization_headers()
+
+        # Start generation BEFORE LLM call (captures start time)
+        generation = start_llm_generation(
+            trace=trace,
+            name="detect_intent",
+            model="deepseek-chat",
+            input_messages=[{"role": "user", "content": prompt}],
+            metadata={"temperature": 0.1},
+            prompt=intent_prompt,
+        )
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
@@ -77,38 +87,32 @@ Return ONLY: greeting, inquire_services, request_quote, chat_with_agent, share_c
                     "temperature": 0.1
                 }
             )
-            data = response.json()
+        data = response.json()
 
-            usage = data.get("usage", {})
-            if usage:
-                DeepSeekOptimizer.update_usage(
-                    input_tokens=usage.get("prompt_tokens", 0),
-                    output_tokens=usage.get("completion_tokens", 0),
-                    cache_hit=response.headers.get("X-Cache-Status") == "hit"
-                )
+        usage = data.get("usage", {})
+        if usage:
+            DeepSeekOptimizer.update_usage(
+                input_tokens=usage.get("prompt_tokens", 0),
+                output_tokens=usage.get("completion_tokens", 0),
+                cache_hit=response.headers.get("X-Cache-Status") == "hit"
+            )
 
-            raw_intent = data["choices"][0]["message"]["content"].strip().lower()
+        raw_intent = data["choices"][0]["message"]["content"].strip().lower()
 
-            # Extrair intent válido da resposta
-            valid_intents = {"greeting", "request_quote", "inquire_services", "chat_with_agent", "share_contact", "off_topic"}
-            for valid in valid_intents:
-                if valid in raw_intent:
-                    intent = valid
-                    break
+        # Extrair intent válido da resposta
+        valid_intents = {"greeting", "request_quote", "inquire_services", "chat_with_agent", "share_contact", "off_topic"}
+        for valid in valid_intents:
+            if valid in raw_intent:
+                intent = valid
+                break
 
-            # Log to Langfuse
-            trace = state.get("langfuse_trace")
-            if trace:
-                log_llm_generation(
-                    trace=trace,
-                    name="detect_intent",
-                    model="deepseek-chat",
-                    input_messages=[{"role": "user", "content": prompt}],
-                    output_content=raw_intent,
-                    usage=usage,
-                    metadata={"temperature": 0.1, "detected_intent": intent},
-                    prompt=intent_prompt_used,
-                )
+        # End generation AFTER LLM call (captures end time)
+        end_llm_generation(
+            generation=generation,
+            output_content=raw_intent,
+            usage=usage,
+            metadata={"detected_intent": intent},
+        )
     except Exception as e:
         logging.error(f"Error in intent detection: {e}")
         intent = "inquire_services"
@@ -231,6 +235,7 @@ IMPORTANT: Always include WhatsApp (11) 98286-4581 at the end of your response."
 async def generate_response(state: dict) -> dict:
     user_input = state["user_input"]
     augmented_input = state.get("augmented_input")
+    trace = state.get("langfuse_trace")
 
     # Get instruction prompt from Langfuse
     instruction_prompt = get_prompt("generate_response_instruction")
@@ -251,14 +256,24 @@ async def generate_response(state: dict) -> dict:
     try:
         # Adicionar headers de otimização
         optimization_headers = DeepSeekOptimizer.get_optimization_headers()
-        
+
+        # Start generation BEFORE LLM call
+        generation = start_llm_generation(
+            trace=trace,
+            name="generate_response",
+            model="deepseek-chat",
+            input_messages=messages,
+            metadata={"temperature": 0.7},
+            prompt=instruction_prompt if instruction_prompt else None,
+        )
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 "https://api.deepseek.com/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
                     "Content-Type": "application/json",
-                    **optimization_headers  # Headers de otimização
+                    **optimization_headers
                 },
                 json={
                     "model": "deepseek-chat",
@@ -287,19 +302,12 @@ async def generate_response(state: dict) -> dict:
 
     reply = data["choices"][0]["message"]["content"]
 
-    # Log to Langfuse
-    trace = state.get("langfuse_trace")
-    if trace:
-        log_llm_generation(
-            trace=trace,
-            name="generate_response",
-            model="deepseek-chat",
-            input_messages=messages,
-            output_content=reply,
-            usage=usage,
-            metadata={"temperature": 0.7},
-            prompt=instruction_prompt if instruction_prompt else None,
-        )
+    # End generation AFTER LLM call
+    end_llm_generation(
+        generation=generation,
+        output_content=reply,
+        usage=usage,
+    )
 
     return {
         **state,
@@ -341,6 +349,8 @@ async def revise_response(state: dict) -> dict:
             "step": "revision_skipped"
         }
 
+    trace = state.get("langfuse_trace")
+
     # Get revision prompt from Langfuse
     revise_prompt = get_prompt("revise_response")
     if revise_prompt:
@@ -355,14 +365,24 @@ async def revise_response(state: dict) -> dict:
     try:
         # Adicionar headers de otimização
         optimization_headers = DeepSeekOptimizer.get_optimization_headers()
-        
+
+        # Start generation BEFORE LLM call
+        generation = start_llm_generation(
+            trace=trace,
+            name="revise_response",
+            model="deepseek-chat",
+            input_messages=[{"role": "user", "content": prompt}],
+            metadata={"temperature": 0.5},
+            prompt=revise_prompt if revise_prompt else None,
+        )
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 "https://api.deepseek.com/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
                     "Content-Type": "application/json",
-                    **optimization_headers  # Headers de otimização
+                    **optimization_headers
                 },
                 json={
                     "model": "deepseek-chat",
@@ -377,7 +397,7 @@ async def revise_response(state: dict) -> dict:
             "revised_response": "Sorry, the service is taking too long to revise the response. Please try again later.",
             "step": "error_timeout"
         }
-    
+
     data = response.json()
 
     # Rastrear uso de tokens
@@ -391,19 +411,12 @@ async def revise_response(state: dict) -> dict:
 
     revised = data["choices"][0]["message"]["content"]
 
-    # Log to Langfuse
-    trace = state.get("langfuse_trace")
-    if trace:
-        log_llm_generation(
-            trace=trace,
-            name="revise_response",
-            model="deepseek-chat",
-            input_messages=[{"role": "user", "content": prompt}],
-            output_content=revised,
-            usage=usage,
-            metadata={"temperature": 0.5},
-            prompt=revise_prompt if revise_prompt else None,
-        )
+    # End generation AFTER LLM call
+    end_llm_generation(
+        generation=generation,
+        output_content=revised,
+        usage=usage,
+    )
 
     revised = revised.replace('\n\n', '\n').replace('\n', '\n\n')
     return {**state, "revised_response": revised, "step": "revise_response"}
@@ -452,6 +465,7 @@ async def generate_off_topic_response(state: dict) -> dict:
     """
     user_input = state.get("user_input", "")
     language = state.get("language", "pt-BR")
+    trace = state.get("langfuse_trace")
 
     # Buscar prompt do Langfuse
     off_topic_prompt = get_prompt("generate_off_topic")
@@ -469,6 +483,16 @@ async def generate_off_topic_response(state: dict) -> dict:
         prompt = f"User asked '{user_input}' which is off-topic. Politely redirect to digital services in {language}."
 
     try:
+        # Start generation BEFORE LLM call
+        generation = start_llm_generation(
+            trace=trace,
+            name="generate_off_topic",
+            model="deepseek-chat",
+            input_messages=[{"role": "user", "content": prompt}],
+            metadata={"temperature": 0.7},
+            prompt=off_topic_prompt,
+        )
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 "https://api.deepseek.com/v1/chat/completions",
@@ -485,17 +509,12 @@ async def generate_off_topic_response(state: dict) -> dict:
             data = resp.json()
             response = data["choices"][0]["message"]["content"].strip()
 
-            # Log to Langfuse
-            trace = state.get("langfuse_trace")
-            if trace:
-                log_llm_generation(
-                    trace=trace,
-                    name="generate_off_topic",
-                    model="deepseek-chat",
-                    input_messages=[{"role": "user", "content": prompt}],
-                    output_content=response,
-                    prompt=off_topic_prompt,
-                )
+            # End generation AFTER LLM call
+            end_llm_generation(
+                generation=generation,
+                output_content=response,
+                usage=data.get("usage"),
+            )
     except Exception as e:
         logging.error(f"Error generating off-topic response: {e}")
         response = "Desculpe, sou especializado em soluções digitais. Posso ajudar com sites, automação ou IA?"
@@ -514,6 +533,7 @@ async def generate_greeting_response(state: dict) -> dict:
     """
     language = state.get("language", "pt-BR")
     current_page = state.get("current_page", "/")
+    trace = state.get("langfuse_trace")
 
     # Buscar prompt do Langfuse
     greeting_prompt = get_prompt("generate_greeting")
@@ -532,6 +552,16 @@ async def generate_greeting_response(state: dict) -> dict:
         prompt = f"Generate a friendly greeting in {language}. Include WhatsApp (11) 98286-4581."
 
     try:
+        # Start generation BEFORE LLM call
+        generation = start_llm_generation(
+            trace=trace,
+            name="generate_greeting",
+            model="deepseek-chat",
+            input_messages=[{"role": "user", "content": prompt}],
+            metadata={"temperature": 0.7},
+            prompt=greeting_prompt,
+        )
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 "https://api.deepseek.com/v1/chat/completions",
@@ -548,17 +578,12 @@ async def generate_greeting_response(state: dict) -> dict:
             data = resp.json()
             response = data["choices"][0]["message"]["content"].strip()
 
-            # Log to Langfuse
-            trace = state.get("langfuse_trace")
-            if trace:
-                log_llm_generation(
-                    trace=trace,
-                    name="generate_greeting",
-                    model="deepseek-chat",
-                    input_messages=[{"role": "user", "content": prompt}],
-                    output_content=response,
-                    prompt=greeting_prompt,
-                )
+            # End generation AFTER LLM call
+            end_llm_generation(
+                generation=generation,
+                output_content=response,
+                usage=data.get("usage"),
+            )
     except Exception as e:
         logging.error(f"Error generating greeting: {e}")
         # Fallback minimo
