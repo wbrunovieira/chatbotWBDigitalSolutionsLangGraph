@@ -32,104 +32,88 @@ def compute_embedding(text: str) -> list:
 
 
 async def detect_intent(state: dict) -> dict:
+    """
+    Detecta intent usando prompt do Langfuse.
+    Sem bypass hardcoded - sempre usa o prompt para consistência.
+    """
     user_input = state["user_input"]
-    lower_input = user_input.lower()
-    
-    # Detecção rápida de saudações simples (sem chamar API)
-    greeting_patterns = [
-        "oi", "olá", "ola", "oie", "oii", "oiii",
-        "hi", "hello", "hey", "hii", "hiii",
-        "hola", "holaa",
-        "ciao", "salve", "ciaoo"
-    ]
-    
-    # Se for apenas uma saudação simples (menos de 15 caracteres e contém padrão de saudação)
-    if len(user_input.strip()) < 15 and any(greet in lower_input for greet in greeting_patterns):
-        return {**state, "intent": "greeting", "step": "detect_intent"}
+    language = state.get("language", "pt-BR")
+    current_page = state.get("current_page", "/")
 
-    if any(p in lower_input for p in ["falar com um humano", "fale com um humano", "humano", "quero falar com alguém"]):
-        intent = "chat_with_agent"
-    elif any(p in lower_input for p in ["solicitar orçamento", "quero um orçamento", "fazer um orçamento"]):
-        intent = "request_quote"
-    elif any(p in lower_input for p in ["ver serviços", "quais serviços", "serviços disponíveis"]):
-        intent = "inquire_services"
-    else:
-        # Get prompt from Langfuse (with local fallback)
-        intent_prompt = get_prompt("detect_intent")
-        if intent_prompt:
-            prompt = intent_prompt.compile(user_input=user_input)
-        else:
-            # Hardcoded fallback if no prompt available
-            prompt = f"""Analyze this message and determine if it's related to business/technology services or not.
-
-Context: WB Digital Solutions provides websites, automation, and AI solutions for businesses.
-
-Message: "{user_input}"
-
-Return ONLY the intent word: greeting, inquire_services, request_quote, chat_with_agent, schedule_meeting, or off_topic"""
-
+    # Get prompt from Langfuse (with local fallback)
+    intent_prompt = get_prompt("detect_intent")
+    if intent_prompt:
         try:
-            # Adicionar headers de otimização
-            optimization_headers = DeepSeekOptimizer.get_optimization_headers()
-            
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    "https://api.deepseek.com/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                        "Content-Type": "application/json",
-                        **optimization_headers  # Headers de otimização
-                    },
-                    json={
-                        "model": "deepseek-chat",
-                        "messages": [{"role": "user", "content": prompt}],
-                        "temperature": 0.1
-                    }
+            prompt = intent_prompt.compile(
+                user_input=user_input,
+                language=language,
+                current_page=current_page,
+            )
+        except:
+            # Fallback se compile falhar (variáveis não existem no prompt)
+            prompt = intent_prompt.compile(user_input=user_input)
+    else:
+        # Hardcoded fallback if no prompt available
+        prompt = f"""Classify intent for: "{user_input}"
+Return ONLY: greeting, inquire_services, request_quote, chat_with_agent, share_contact, or off_topic"""
+
+    intent = "inquire_services"  # default
+    intent_prompt_used = intent_prompt
+
+    try:
+        optimization_headers = DeepSeekOptimizer.get_optimization_headers()
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                    "Content-Type": "application/json",
+                    **optimization_headers
+                },
+                json={
+                    "model": "deepseek-chat",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.1
+                }
+            )
+            data = response.json()
+
+            usage = data.get("usage", {})
+            if usage:
+                DeepSeekOptimizer.update_usage(
+                    input_tokens=usage.get("prompt_tokens", 0),
+                    output_tokens=usage.get("completion_tokens", 0),
+                    cache_hit=response.headers.get("X-Cache-Status") == "hit"
                 )
-                data = response.json()
 
-                # Rastrear uso de tokens
-                usage = data.get("usage", {})
-                if usage:
-                    DeepSeekOptimizer.update_usage(
-                        input_tokens=usage.get("prompt_tokens", 0),
-                        output_tokens=usage.get("completion_tokens", 0),
-                        cache_hit=response.headers.get("X-Cache-Status") == "hit"
-                    )
+            raw_intent = data["choices"][0]["message"]["content"].strip().lower()
 
-                raw_intent = data["choices"][0]["message"]["content"].strip().lower()
-                intent = raw_intent if raw_intent in {"greeting", "request_quote", "inquire_services", "chat_with_agent", "schedule_meeting", "off_topic"} else "inquire_services"
+            # Extrair intent válido da resposta
+            valid_intents = {"greeting", "request_quote", "inquire_services", "chat_with_agent", "share_contact", "off_topic"}
+            for valid in valid_intents:
+                if valid in raw_intent:
+                    intent = valid
+                    break
 
-                # Log to Langfuse
-                trace = state.get("langfuse_trace")
-                if trace:
-                    log_llm_generation(
-                        trace=trace,
-                        name="detect_intent",
-                        model="deepseek-chat",
-                        input_messages=[{"role": "user", "content": prompt}],
-                        output_content=raw_intent,
-                        usage=usage,
-                        metadata={"temperature": 0.1, "detected_intent": intent},
-                        prompt=intent_prompt if intent_prompt else None,
-                    )
-        except Exception as e:
-            logging.error(f"Error in intent detection: {e}")
-            intent = "inquire_services"
-            intent_prompt = None  
+            # Log to Langfuse
+            trace = state.get("langfuse_trace")
+            if trace:
+                log_llm_generation(
+                    trace=trace,
+                    name="detect_intent",
+                    model="deepseek-chat",
+                    input_messages=[{"role": "user", "content": prompt}],
+                    output_content=raw_intent,
+                    usage=usage,
+                    metadata={"temperature": 0.1, "detected_intent": intent},
+                    prompt=intent_prompt_used,
+                )
+    except Exception as e:
+        logging.error(f"Error in intent detection: {e}")
+        intent = "inquire_services"
 
-    # Adicionar flag de fast track para perguntas diretas sobre serviços
-    fast_track_patterns = [
-        "plataforma", "ensino", "ead", "curso", "lms", "educacional",
-        "loja virtual", "ecommerce", "e-commerce", "vender online",
-        "automação", "automatizar", "integração", "api", "webhook",
-        "quanto custa", "preço", "valor", "orçamento", "investimento",
-        "quais serviços", "o que fazem", "o que oferecem", "portfolio"
-    ]
-
-    should_fast_track = any(pattern in lower_input for pattern in fast_track_patterns)
-
-    return {**state, "intent": intent, "step": "detect_intent", "fast_track": should_fast_track}
+    return {**state, "intent": intent, "step": "detect_intent"}
 
 async def retrieve_company_context(state: dict) -> dict:
     """
@@ -179,68 +163,69 @@ async def retrieve_user_context(state: dict) -> dict:
     return {**state, "user_context": user_context, "step": "retrieve_user_context"}
 
 async def augment_query(state: dict) -> dict:
+    """
+    Prepara o contexto para geração de resposta usando prompt do Langfuse.
+    """
     company_context = state.get("company_context", "")
     user_context = state.get("user_context", "")
     user_input = state.get("user_input", "")
     language = state.get("language", "pt-BR")
     page_context = state.get("page_context", "")
     current_page = state.get("current_page", "/")
-    
+    intent = state.get("intent", "inquire_services")
+
     # Determinar instrução de idioma
-    language_instruction = ""
-    if language == "en":
-        language_instruction = "IMPORTANT: Respond in English."
-    elif language == "es":
-        language_instruction = "IMPORTANTE: Responde en español."
-    elif language == "it":
-        language_instruction = "IMPORTANTE: Rispondi in italiano."
-    else:  # pt-BR or default
-        language_instruction = "IMPORTANTE: Responda em português brasileiro."
-    
-    # Adicionar contexto específico da página
-    page_specific_context = ""
-    if current_page == "/websites":
-        page_specific_context = "The user is currently viewing our web development services page. Focus on website features, technologies, and development process."
-    elif current_page == "/automation":
-        page_specific_context = "The user is exploring our automation services. Emphasize workflow optimization, time savings, and integration capabilities."
-    elif current_page == "/ai":
-        page_specific_context = "The user is interested in AI solutions. Highlight machine learning models, AI integrations, and intelligent automation."
-    elif current_page == "/contact":
-        page_specific_context = "The user is on the contact page, likely ready to reach out. Be more direct about contact options."
-    
-    augmented = f"""
-    You are an assistant from WB Digital Solutions, a company specialized in creating premium custom websites, business automation, and AI-driven solutions.
-    
-    {language_instruction}
-    
-    CRITICAL RULE: If the user asks about something COMPLETELY UNRELATED to our services (like geography, general knowledge, math, sports, etc.), politely redirect them to our services. DO NOT answer off-topic questions directly.
-    
-    Current Context:
-    - User is on page: {current_page}
-    - {page_context}
-    {page_specific_context}
-    
-    If the user's question clearly indicates interest in requesting a quote, detailed pricing, project specifics, or hiring services directly, provide detailed information and emphasize our fast response time and personalized service.
-    Based on the company context and the user's question, provide a clear, professional, friendly response.
+    language_instructions = {
+        "en": "IMPORTANT: Respond in English.",
+        "es": "IMPORTANTE: Responde en español.",
+        "it": "IMPORTANTE: Rispondi in italiano.",
+        "pt-BR": "IMPORTANTE: Responda em português brasileiro.",
+    }
+    language_instruction = language_instructions.get(language, language_instructions["pt-BR"])
 
-    Always consider these important aspects if relevant:
-    - Typical timelines (4 to 12 weeks) based on complexity.
-    - Detailed project phases: Discovery, Design, Development, Testing & Launch.
-    - Ongoing post-launch support and hosting options.
-    - Robust security practices including Kubernetes, Rust, and LGPD/GDPR compliance.
-    - SEO optimization and multilingual capabilities.
-    - Suggest contacting our team directly for a detailed and tailored discussion.
+    # Contexto da página
+    page_contexts = {
+        "/websites": "User viewing web development services page.",
+        "/automation": "User exploring automation services.",
+        "/ai": "User interested in AI solutions.",
+        "/contact": "User on contact page, ready to reach out.",
+    }
+    page_specific_context = page_contexts.get(current_page, "User on home page.")
 
-    Company Context:
-    {company_context}
+    # Buscar prompt do Langfuse baseado no intent
+    if intent == "request_quote":
+        system_prompt = get_prompt("generate_pricing_response")
+    else:
+        system_prompt = get_prompt("generate_services_response")
 
-    User's Previous Interaction Context:
-    {user_context}
+    if system_prompt:
+        try:
+            augmented = system_prompt.compile(
+                user_input=user_input,
+                language=language,
+                language_instruction=language_instruction,
+                current_page=current_page,
+                page_context=page_specific_context,
+                company_context=company_context or "WB Digital Solutions - websites, automation, AI",
+                user_context=user_context,
+                intent=intent,
+                whatsapp="(11) 98286-4581",
+                email="bruno@wbdigitalsolutions.com",
+            )
+        except Exception as e:
+            logging.warning(f"Error compiling system prompt: {e}")
+            # Fallback simples
+            augmented = f"""You are WB Digital Solutions assistant. {language_instruction}
+Answer: {user_input}
+Include WhatsApp (11) 98286-4581 at the end."""
+    else:
+        # Fallback se não encontrar prompt no Langfuse
+        augmented = f"""You are WB Digital Solutions assistant specializing in websites, automation, and AI.
+{language_instruction}
+Context: {company_context}
+User question: {user_input}
+IMPORTANT: Always include WhatsApp (11) 98286-4581 at the end of your response."""
 
-    User's Current Question:
-    {user_input}
-    """
-    
     return {**state, "augmented_input": augmented, "step": "augment_query"}
 
 async def generate_response(state: dict) -> dict:
@@ -463,56 +448,58 @@ async def save_log_qdrant(state: dict) -> dict:
 
 async def generate_off_topic_response(state: dict) -> dict:
     """
-    Resposta educada para perguntas fora do escopo, sem gastar com API
+    Gera resposta para perguntas fora do escopo usando prompt do Langfuse.
     """
+    user_input = state.get("user_input", "")
     language = state.get("language", "pt-BR")
-    
-    # Respostas por idioma
-    responses = {
-        "pt-BR": (
-            "Desculpe, sou um assistente especializado em soluções digitais da WB Digital Solutions. "
-            "Posso ajudar com informações sobre:\n\n"
-            "🌐 **Desenvolvimento de Sites** (e-commerce, institucional, landing pages)\n"
-            "🤖 **Automação de Processos** (chatbots, integração de sistemas)\n"
-            "🧠 **Soluções com IA** (análise de dados, machine learning)\n"
-            "💰 **Orçamentos e Prazos** para projetos digitais\n\n"
-            "Como posso ajudar com seus projetos digitais hoje?"
-        ),
-        "en": (
-            "Sorry, I'm a specialized assistant for WB Digital Solutions' digital services. "
-            "I can help you with:\n\n"
-            "🌐 **Website Development** (e-commerce, corporate, landing pages)\n"
-            "🤖 **Process Automation** (chatbots, system integration)\n"
-            "🧠 **AI Solutions** (data analysis, machine learning)\n"
-            "💰 **Quotes and Timelines** for digital projects\n\n"
-            "How can I help with your digital projects today?"
-        ),
-        "es": (
-            "Lo siento, soy un asistente especializado en soluciones digitales de WB Digital Solutions. "
-            "Puedo ayudarte con:\n\n"
-            "🌐 **Desarrollo Web** (e-commerce, corporativo, landing pages)\n"
-            "🤖 **Automatización de Procesos** (chatbots, integración de sistemas)\n"
-            "🧠 **Soluciones con IA** (análisis de datos, machine learning)\n"
-            "💰 **Presupuestos y Plazos** para proyectos digitales\n\n"
-            "¿Cómo puedo ayudarte con tus proyectos digitales hoy?"
-        ),
-        "it": (
-            "Mi dispiace, sono un assistente specializzato in soluzioni digitali di WB Digital Solutions. "
-            "Posso aiutarti con:\n\n"
-            "🌐 **Sviluppo Web** (e-commerce, aziendale, landing page)\n"
-            "🤖 **Automazione Processi** (chatbot, integrazione sistemi)\n"
-            "🧠 **Soluzioni AI** (analisi dati, machine learning)\n"
-            "💰 **Preventivi e Tempi** per progetti digitali\n\n"
-            "Come posso aiutarti con i tuoi progetti digitali oggi?"
-        )
-    }
-    
-    # Mapear language code
-    lang_map = {"en": "en", "es": "es", "it": "it"}
-    response_lang = lang_map.get(language, "pt-BR")
-    
-    response = responses.get(response_lang, responses["pt-BR"])
-    
+
+    # Buscar prompt do Langfuse
+    off_topic_prompt = get_prompt("generate_off_topic")
+
+    if off_topic_prompt:
+        try:
+            prompt = off_topic_prompt.compile(
+                user_input=user_input,
+                language=language,
+            )
+        except Exception as e:
+            logging.warning(f"Error compiling off_topic prompt: {e}")
+            prompt = f"User asked '{user_input}' which is off-topic. Politely redirect to digital services in {language}."
+    else:
+        prompt = f"User asked '{user_input}' which is off-topic. Politely redirect to digital services in {language}."
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "deepseek-chat",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.7,
+                },
+            )
+            data = resp.json()
+            response = data["choices"][0]["message"]["content"].strip()
+
+            # Log to Langfuse
+            trace = state.get("langfuse_trace")
+            if trace:
+                log_llm_generation(
+                    trace=trace,
+                    name="generate_off_topic",
+                    model="deepseek-chat",
+                    input_messages=[{"role": "user", "content": prompt}],
+                    output_content=response,
+                    prompt=off_topic_prompt,
+                )
+    except Exception as e:
+        logging.error(f"Error generating off-topic response: {e}")
+        response = "Desculpe, sou especializado em soluções digitais. Posso ajudar com sites, automação ou IA?"
+
     return {
         **state,
         "response": response,
@@ -522,75 +509,60 @@ async def generate_off_topic_response(state: dict) -> dict:
     }
 
 async def generate_greeting_response(state: dict) -> dict:
-    user_input = state.get("user_input", "")
-    # Usar o idioma enviado pelo frontend em vez de detectar
+    """
+    Gera saudação usando prompt do Langfuse.
+    """
     language = state.get("language", "pt-BR")
     current_page = state.get("current_page", "/")
-    
-    # Mapear language code para langdetect format
-    if language == "en":
-        detected_lang = "en"
-    elif language == "es":
-        detected_lang = "es"
-    elif language == "it":
-        detected_lang = "it"
-    else:  # pt-BR or default
-        detected_lang = "pt"
 
-    # Adicionar contexto da página na saudação
-    page_hint = ""
-    if current_page == "/websites":
-        page_hint = {"en": "I see you're interested in our web development services!", 
-                     "es": "¡Veo que estás interesado en nuestros servicios de desarrollo web!",
-                     "it": "Vedo che sei interessato ai nostri servizi di sviluppo web!",
-                     "pt": "Vejo que você está interessado em nossos serviços de desenvolvimento web!"}
-    elif current_page == "/automation":
-        page_hint = {"en": "I see you're exploring our automation solutions!",
-                     "es": "¡Veo que estás explorando nuestras soluciones de automatización!",
-                     "it": "Vedo che stai esplorando le nostre soluzioni di automazione!",
-                     "pt": "Vejo que você está explorando nossas soluções de automação!"}
-    elif current_page == "/ai":
-        page_hint = {"en": "I see you're interested in AI solutions!",
-                     "es": "¡Veo que estás interesado en soluciones de IA!",
-                     "it": "Vedo che sei interessato alle soluzioni AI!",
-                     "pt": "Vejo que você está interessado em soluções de IA!"}
+    # Buscar prompt do Langfuse
+    greeting_prompt = get_prompt("generate_greeting")
 
-    # Adicionar contexto da página se disponível
-    context_addition = ""
-    if page_hint and detected_lang in page_hint:
-        context_addition = f" {page_hint[detected_lang]}"
-
-    if detected_lang == "en":
-        response = (
-            "Hello! 👋 I'm the virtual assistant from WB Digital Solutions. "
-            "We help companies grow with fast websites, smart automations, and AI-powered tools."
-            f"{context_addition} "
-            "Tell me what you're looking for — a quote, a specific service, or just some questions? 😊"
-        )
-
-    elif detected_lang == "es":
-        response = (
-            "¡Hola! 👋 Soy el asistente virtual de WB Digital Solutions. "
-            "Ayudamos a las empresas a crecer con sitios web rápidos, automatizaciones inteligentes y soluciones con IA."
-            f"{context_addition} "
-            "¿En qué puedo ayudarte? ¿Quieres una cotización, información sobre un servicio o tienes alguna duda? 😊"
-        )
-
-    elif detected_lang == "it":
-        response = (
-            "Ciao! 👋 Sono l'assistente virtuale di WB Digital Solutions. "
-            "Aiutiamo le aziende a crescere con siti web veloci, automazioni intelligenti e soluzioni basate sull'intelligenza artificiale."
-            f"{context_addition} "
-            "Dimmi come posso aiutarti — vuoi un preventivo, informazioni su un servizio, o hai delle domande? 😊"
-        )
-
+    if greeting_prompt:
+        try:
+            prompt = greeting_prompt.compile(
+                language=language,
+                current_page=current_page,
+                whatsapp="(11) 98286-4581",
+            )
+        except Exception as e:
+            logging.warning(f"Error compiling greeting prompt: {e}")
+            prompt = f"Generate a friendly greeting in {language}. Include WhatsApp (11) 98286-4581."
     else:
-        response = (
-            "Olá! 👋 Sou o assistente da WB Digital Solutions. "
-            "Criamos sites, automações e soluções com IA para empresas crescerem. "
-            f"{context_addition} "
-            "Como posso ajudar você hoje? 💬 WhatsApp (11) 98286-4581 - resposta em 2h!"
-        )
+        prompt = f"Generate a friendly greeting in {language}. Include WhatsApp (11) 98286-4581."
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "deepseek-chat",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.7,
+                },
+            )
+            data = resp.json()
+            response = data["choices"][0]["message"]["content"].strip()
+
+            # Log to Langfuse
+            trace = state.get("langfuse_trace")
+            if trace:
+                log_llm_generation(
+                    trace=trace,
+                    name="generate_greeting",
+                    model="deepseek-chat",
+                    input_messages=[{"role": "user", "content": prompt}],
+                    output_content=response,
+                    prompt=greeting_prompt,
+                )
+    except Exception as e:
+        logging.error(f"Error generating greeting: {e}")
+        # Fallback minimo
+        response = "Olá! 👋 Sou o assistente da WB Digital Solutions. Como posso ajudar? 📲 WhatsApp (11) 98286-4581"
 
     return {
         **state,

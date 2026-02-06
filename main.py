@@ -64,25 +64,15 @@ async def chat(request: Request):
     
     # Log dos dados recebidos para debug
     logging.info(f"Request received - User: {user_id}, Language: {language}, Page: {current_page}")
-    
-    # PRIMEIRA VERIFICAÇÃO: Cache de respostas frequentes (< 100ms)
-    cached_intent = detect_cached_intent(user_input, language)
-    if cached_intent:
-        logging.info(f"Cache hit for pattern: {cached_intent['cache_key']}")
-        return {
-            "raw_response": cached_intent["response"],
-            "revised_response": cached_intent["response"],
-            "response_parts": cached_intent["response_parts"],
-            "detected_intent": cached_intent["intent"],
-            "final_step": "cached_response",
-            "language_used": language,
-            "context_page": current_page,
-            "is_greeting": False,
-            "cached": True,
-            "cache_type": "pattern_match"
-        }
 
-    # SEGUNDA VERIFICAÇÃO: Cache Redis para mensagens exatas
+    # CACHE DE PADRÕES DESATIVADO - Agora usamos prompts do Langfuse para todas as respostas
+    # Isso permite versionamento e controle via Langfuse
+    # cached_intent = detect_cached_intent(user_input, language)
+    # if cached_intent:
+    #     logging.info(f"Cache hit for pattern: {cached_intent['cache_key']}")
+    #     return {...}
+
+    # VERIFICAÇÃO: Cache Redis para mensagens exatas (mantido para performance)
     cache_data = f"{user_input}_{language}_{current_page}"
     cache_key = sha256(cache_data.encode('utf-8')).hexdigest()
 
