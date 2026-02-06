@@ -26,6 +26,7 @@ import httpx
 import json
 import logging
 from langfuse import Langfuse
+from langfuse.experiment import Evaluation
 
 from config import (
     LANGFUSE_PUBLIC_KEY,
@@ -174,11 +175,15 @@ def create_evaluators(langfuse: Langfuse):
         }
 
         if expected in equivalent:
-            score = 1 if detected in equivalent[expected] else 0
+            score = 1.0 if detected in equivalent[expected] else 0.0
         else:
-            score = 1 if detected == expected else 0
+            score = 1.0 if detected == expected else 0.0
 
-        return {"name": "intent_correct", "value": score, "comment": f"detected={detected}, expected={expected}"}
+        return Evaluation(
+            name="intent_correct",
+            value=score,
+            comment=f"detected={detected}, expected={expected}"
+        )
 
     def contact_evaluator(*, input, output, expected_output, metadata=None, **kwargs):
         """Avalia se menciona contato quando apropriado."""
@@ -191,11 +196,13 @@ def create_evaluators(langfuse: Langfuse):
         )
 
         if should_mention:
-            score = 1 if mentions else 0
+            score = 1.0 if mentions else 0.0
+            comment = "Mentions contact" if mentions else "Missing contact info"
         else:
-            score = 1  # Não precisa mencionar, então passa
+            score = 1.0  # Não precisa mencionar, então passa
+            comment = "Contact not required"
 
-        return {"name": "mentions_contact", "value": score}
+        return Evaluation(name="mentions_contact", value=score, comment=comment)
 
     def tone_evaluator(*, input, output, expected_output, metadata=None, **kwargs):
         """Avalia o tom da resposta."""
@@ -205,8 +212,10 @@ def create_evaluators(langfuse: Langfuse):
         has_emoji = any(c in response for c in "👋😊🚀💡📱✅🌐🤖🧠💎⚙️📋📲🎓🛒")
         not_too_short = len(response) > 50
 
-        score = 1 if (has_emoji or not_too_short) else 0
-        return {"name": "tone", "value": score}
+        score = 1.0 if (has_emoji or not_too_short) else 0.0
+        comment = f"emoji={has_emoji}, length={len(response)}"
+
+        return Evaluation(name="tone", value=score, comment=comment)
 
     def language_evaluator(*, input, output, expected_output, metadata=None, **kwargs):
         """Avalia se a resposta está no idioma correto."""
@@ -221,20 +230,24 @@ def create_evaluators(langfuse: Langfuse):
         response_lower = response.lower()
 
         if expected_lang == "pt-BR":
-            score = 1 if any(w in response_lower for w in pt_words) else 0
+            score = 1.0 if any(w in response_lower for w in pt_words) else 0.0
         elif expected_lang == "en":
-            score = 1 if any(w in response_lower for w in en_words) else 0
+            score = 1.0 if any(w in response_lower for w in en_words) else 0.0
         elif expected_lang == "es":
-            score = 1 if any(w in response_lower for w in es_words) else 0
+            score = 1.0 if any(w in response_lower for w in es_words) else 0.0
         else:
-            score = 1  # Default pass for other languages
+            score = 1.0  # Default pass for other languages
 
-        return {"name": "language_match", "value": score}
+        return Evaluation(
+            name="language_match",
+            value=score,
+            comment=f"expected={expected_lang}"
+        )
 
     def relevance_evaluator(*, input, output, expected_output, metadata=None, **kwargs):
         """Avalia relevância usando LLM."""
         if not input or not output:
-            return {"name": "relevance", "value": 0, "comment": "Missing input/output"}
+            return Evaluation(name="relevance", value=0.0, comment="Missing input/output")
 
         scores = call_evaluator_sync(
             user_message=input.get("message", ""),
@@ -246,7 +259,11 @@ def create_evaluators(langfuse: Langfuse):
             expected_mention_contact=expected_output.get("should_mention_contact", True) if expected_output else True,
         )
 
-        return {"name": "relevance", "value": scores.get("relevance", 0)}
+        return Evaluation(
+            name="relevance",
+            value=float(scores.get("relevance", 0)),
+            comment="LLM-as-judge evaluation"
+        )
 
     return [
         intent_evaluator,
@@ -292,40 +309,45 @@ def run_experiment_sync(run_name: str, langfuse: Langfuse):
             max_concurrency=3,  # Limitar para não sobrecarregar o chatbot
         )
 
-        # Exibir resultados
+        # Exibir resultados usando o método format() do SDK
         print(f"\n{'='*60}")
         print(f"  Experiment Results: {run_name}")
         print(f"{'='*60}")
 
-        # Calcular estatísticas a partir dos scores do resultado
+        # Usar o método format() para exibir resultados
+        if hasattr(result, 'format'):
+            formatted = result.format()
+            print(formatted)
+
+        # Também calcular estatísticas a partir de item_results
         scores_by_name = {}
 
-        # Tentar diferentes formas de acessar os resultados
-        if hasattr(result, 'scores') and result.scores:
-            for score in result.scores:
-                name = score.name if hasattr(score, 'name') else str(score.get('name', 'unknown'))
-                value = score.value if hasattr(score, 'value') else score.get('value', 0)
-                if name not in scores_by_name:
-                    scores_by_name[name] = []
-                scores_by_name[name].append(value)
-        elif hasattr(result, 'items') and result.items:
-            for item in result.items:
-                if hasattr(item, 'scores'):
-                    for score in item.scores:
-                        name = score.name if hasattr(score, 'name') else str(score.get('name', 'unknown'))
-                        value = score.value if hasattr(score, 'value') else score.get('value', 0)
+        if hasattr(result, 'item_results') and result.item_results:
+            for item_result in result.item_results:
+                if hasattr(item_result, 'evaluations') and item_result.evaluations:
+                    for evaluation in item_result.evaluations:
+                        name = evaluation.name if hasattr(evaluation, 'name') else 'unknown'
+                        value = evaluation.value if hasattr(evaluation, 'value') else 0
                         if name not in scores_by_name:
                             scores_by_name[name] = []
                         scores_by_name[name].append(value)
 
         if scores_by_name:
+            print(f"\n{'='*60}")
+            print("  Summary Statistics:")
+            print(f"{'='*60}")
             for name, scores_list in scores_by_name.items():
                 avg = sum(scores_list) / len(scores_list) if scores_list else 0
                 passed = sum(1 for s in scores_list if s and s >= 0.5)
                 bar = "█" * int(avg * 20) + "░" * (20 - int(avg * 20))
                 print(f"  {name:20} {bar} {avg*100:5.1f}% ({passed}/{len(scores_list)})")
-        else:
-            print("  No scores available - check Langfuse UI for details")
+
+            # Overall score
+            total_passed = sum(sum(1 for s in scores if s and s >= 0.5) for scores in scores_by_name.values())
+            total_possible = sum(len(scores) for scores in scores_by_name.values())
+            overall = round(total_passed / total_possible * 100) if total_possible > 0 else 0
+            print(f"\n  OVERALL SCORE: {overall}%")
+
 
         print(f"{'='*60}")
         print(f"\nExperiment completed! View detailed results at:")
