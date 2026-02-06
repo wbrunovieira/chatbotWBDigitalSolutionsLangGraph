@@ -171,6 +171,77 @@ def create_trace(
         return None
 
 
+def start_llm_generation(
+    trace,
+    name: str,
+    model: str,
+    input_messages: List[Dict[str, str]],
+    metadata: Optional[Dict[str, Any]] = None,
+    prompt=None,
+):
+    """
+    Start an LLM generation BEFORE calling the LLM.
+    Call this before making the API request to capture start time.
+
+    Returns:
+        Generation object to be ended with end_llm_generation()
+    """
+    if not trace:
+        return None
+    try:
+        gen_kwargs = {
+            "name": name,
+            "model": model,
+            "input": input_messages,
+            "metadata": metadata,
+        }
+
+        # Link prompt if provided and not a fallback
+        if prompt and hasattr(prompt, "is_fallback") is False:
+            gen_kwargs["prompt"] = prompt
+
+        return trace.generation(**gen_kwargs)
+    except Exception as e:
+        logging.warning(f"Failed to start Langfuse generation: {e}")
+        return None
+
+
+def end_llm_generation(
+    generation,
+    output_content: str,
+    usage: Optional[Dict[str, int]] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+):
+    """
+    End an LLM generation AFTER the LLM response is received.
+    This captures the end time for latency calculation.
+
+    Args:
+        generation: Generation object from start_llm_generation()
+        output_content: LLM response content
+        usage: Token usage dict
+        metadata: Additional metadata to merge
+    """
+    if not generation:
+        return
+    try:
+        end_kwargs = {"output": output_content}
+
+        if usage:
+            end_kwargs["usage"] = {
+                "input": usage.get("prompt_tokens", 0),
+                "output": usage.get("completion_tokens", 0),
+                "total": usage.get("total_tokens", 0),
+            }
+
+        if metadata:
+            end_kwargs["metadata"] = metadata
+
+        generation.end(**end_kwargs)
+    except Exception as e:
+        logging.warning(f"Failed to end Langfuse generation: {e}")
+
+
 def log_llm_generation(
     trace,
     name: str,
@@ -182,17 +253,11 @@ def log_llm_generation(
     prompt=None,
 ):
     """
-    Log an LLM generation to a trace.
+    Log an LLM generation to a trace (legacy - use start/end for latency tracking).
 
-    Args:
-        trace: Langfuse trace object
-        name: Generation name
-        model: Model used
-        input_messages: Input messages
-        output_content: Generated output
-        usage: Token usage dict
-        metadata: Additional metadata
-        prompt: Optional Langfuse prompt object to link
+    NOTE: This logs everything at once, so latency will be ~0.
+    For accurate latency, use start_llm_generation() before LLM call
+    and end_llm_generation() after.
     """
     if not trace:
         return None
