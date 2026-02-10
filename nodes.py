@@ -7,28 +7,28 @@ import logging
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import VectorParams, Distance
 from config import DEEPSEEK_API_KEY
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from langdetect import detect
 from deepseek_optimizer import DeepSeekOptimizer, estimate_tokens, should_skip_api_call
 from langfuse_client import start_llm_generation, end_llm_generation, get_prompt, evaluate_response, score_trace
 
 
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+# FastEmbed - lightweight ONNX-based embeddings (no PyTorch required)
+embedding_model = TextEmbedding("sentence-transformers/all-MiniLM-L6-v2")
 
 def compute_embedding(text: str) -> list:
     """
-    Computes a real embedding for the given text using Sentence Transformers.
-    Returns a list of floats.
+    Computes embedding using FastEmbed (ONNX-based, no PyTorch).
+    Returns a list of floats with 384 dimensions.
     """
     # Limitar o texto para evitar problemas de performance
-    # O modelo tem limite de contexto e textos muito grandes demoram muito
-    max_length = 512  # Limite de tokens para performance
-    if len(text) > max_length * 4:  # Aproximadamente 4 chars por token
+    max_length = 512
+    if len(text) > max_length * 4:
         text = text[:max_length * 4]
-    
-    # Desabilitar progress bar que pode causar lentidão
-    embedding = embedding_model.encode(text, show_progress_bar=False)
-    return embedding.tolist()
+
+    # FastEmbed retorna um generator, pegamos o primeiro resultado
+    embeddings = list(embedding_model.embed([text]))
+    return embeddings[0].tolist()
 
 
 async def detect_intent(state: dict) -> dict:

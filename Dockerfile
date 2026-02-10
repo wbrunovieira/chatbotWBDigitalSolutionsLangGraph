@@ -1,32 +1,21 @@
-# Stage 1: Build dependencies
-FROM python:3.11-slim AS builder
+# Lightweight image - no PyTorch, uses FastEmbed (ONNX)
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
+# Install minimal build dependencies (for grpcio)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install dependencies
+# Copy and install requirements
 COPY requirements.txt .
-
-# Install PyTorch CPU-only first (saves ~2.3GB vs CUDA version)
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
-
-# Install remaining dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Stage 2: Runtime image (no build tools)
-FROM python:3.11-slim AS runtime
+# Remove build tools to reduce image size
+RUN apt-get purge -y build-essential && apt-get autoremove -y
 
-WORKDIR /app
-
-# Copy installed packages from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
-# Copy application code only (respects .dockerignore)
+# Copy application code (respects .dockerignore)
 COPY . .
 
 EXPOSE 8000
