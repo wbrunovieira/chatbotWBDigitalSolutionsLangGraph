@@ -88,3 +88,14 @@
       raw: |
         cd {{ app_dir }} && docker compose -f {{ compose_file }} ps --format "table {% raw %}{{.Name}}\t{{.Status}}{% endraw %}" 2>/dev/null || docker compose -f {{ compose_file }} ps
       changed_when: false
+
+    - name: Clean Docker (dangling images + build cache)
+      raw: |
+        echo "=== Cleaning Docker ==="
+        echo "Removing dangling images..."
+        docker image prune -f 2>&1 | tail -1
+        echo "Removing build cache..."
+        docker builder prune -f 2>&1 | tail -1
+        echo "=== Disk usage after cleanup ==="
+        docker system df
+      changed_when: false
