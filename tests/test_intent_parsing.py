@@ -108,8 +108,8 @@ class TestPromptsRequestJson:
         compiled = LocalPrompt("detect_intent", tmpl["template"], tmpl["type"]).compile(
             user_input="boa tarde"
         )
-        assert "boa tarde" in compiled          # variable substituted
-        assert '{"intent"' in compiled          # doubled braces rendered to real JSON
+        assert "boa tarde" in compiled          # {{user_input}} substituted (mustache)
+        assert '{"intent"' in compiled          # literal JSON object preserved
         assert "json" in compiled.lower()       # json_object mode requirement
 
     def test_langfuse_source_prompt_is_json(self):

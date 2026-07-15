@@ -5,57 +5,21 @@ Provides a singleton client instance and helper functions.
 """
 import logging
 import json
+import re
 from typing import Optional, Dict, Any, List
 from config import LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST
+from langfuse_prompts_v3 import PROMPTS_V3
 
 # Initialize Langfuse client (lazy)
 _langfuse_client = None
 
-# Local fallback prompts (used when Langfuse is unavailable)
+# Local fallback prompts, DERIVED from the single canonical source
+# (langfuse_prompts_v3.PROMPTS_V3). Used when Langfuse is unreachable. Deriving instead
+# of hand-copying means this fallback can never silently drift from the uploaded prompts —
+# there is exactly one place a prompt is defined.
 LOCAL_PROMPTS = {
-    "detect_intent": {
-        "type": "text",
-        "template": """Classify the intent of this chatbot message. WB Digital Solutions builds websites, e-commerce, automation, AI solutions and AI agents, and e-learning / EAD platforms.
-
-Message: "{user_input}"
-
-Messages are short and may have typos or missing accents ("automassao" = automação). Classify by intent, not spelling:
-- greeting: a social greeting with no other request, including time-of-day greetings ("bom dia", "boa tarde", "boa noite", "hello", "hola", "ciao"). A greeting is NEVER off_topic.
-- request_quote: asks about price or budget ("quanto custa", "preço", "how much").
-- inquire_services: any interest in what WB does, even misspelled ("vcs fazem automassao?", "app com agentes", "plataforma de ensino").
-- share_contact: wants contact info (whatsapp, email, telefone).
-- chat_with_agent: wants to talk to a human.
-- off_topic: ONLY trivia unrelated to WB's business (weather, math, general knowledge). When unsure between a service intent and off_topic, choose the service intent.
-
-Respond with ONLY a JSON object, no prose: {{"intent": "<greeting|request_quote|inquire_services|share_contact|chat_with_agent|off_topic>"}}""",
-    },
-    "generate_response_instruction": {
-        "type": "text",
-        "template": """Before answering, always make sure to:
-- Preserve the user's original language
-- Ignore typos, missing punctuation, or spacing errors
-- Focus on understanding the user's intent clearly
-- Keep responses concise (max 3-4 paragraphs)
-- If including contact, use ONE line: 'WhatsApp (11) 98286-4581 - respondemos em 2h!'
-- Focus on value and benefits for the customer
-- End with a clear next step when appropriate""",
-    },
-    "revise_response": {
-        "type": "text",
-        "template": """Rewrite the following response to make it clearer and friendlier, keeping a professional tone.
-
-IMPORTANT RULES:
-1. Maximum 3 paragraphs or sections
-2. If there's contact info (WhatsApp/email), consolidate in ONE line with a benefit
-3. Keep the main message focused on value to the customer
-4. Maximum 500 characters total
-5. Preserve the original language
-6. End with a clear call-to-action when appropriate
-
-Reply ONLY with the improved text, no explanations.
-
-Original response: {response}""",
-    },
+    name: {"type": data["type"], "template": data["prompt"]}
+    for name, data in PROMPTS_V3.items()
 }
 
 
@@ -70,12 +34,19 @@ class LocalPrompt:
         self.is_fallback = True
 
     def compile(self, **kwargs) -> str | List[Dict[str, str]]:
-        """Compile the prompt with variables."""
-        if self.type == "text":
-            return self.template.format(**kwargs)
-        else:
+        """
+        Compile a text prompt by substituting {{var}} placeholders (mustache-style, to
+        match the canonical PROMPTS_V3 templates). Uses a replacement function so values
+        containing backslashes / group refs are inserted literally, and leaves any
+        unsupplied {{var}} untouched (a forgiving fallback, unlike str.format which raises).
+        """
+        if self.type != "text":
             # For chat type, return as-is (not implemented in fallback)
             return self.template
+        result = self.template
+        for key, value in kwargs.items():
+            result = re.sub(r"\{\{\s*" + re.escape(key) + r"\s*\}\}", lambda _m: str(value), result)
+        return result
 
 
 def get_langfuse():
