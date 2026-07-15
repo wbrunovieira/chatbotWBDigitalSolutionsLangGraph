@@ -295,7 +295,7 @@ StateGraph(WorkflowState) → {
 - Token tracking
 
 ### 2. Qdrant Cloud
-**Host**: `https://9283d202-7df4-4360-9ad5-953f0ab30741.us-east4-0.gcp.cloud.qdrant.io:6333`
+**Host**: configured via the `QDRANT_HOST` env var (see `.env`, not committed)
 **Collections**:
 - `company_info`: Dados estáticos da empresa
 - `chat_logs`: Histórico de conversas

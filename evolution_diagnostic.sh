@@ -91,7 +91,10 @@ echo "==========================================="
 # 10. Testar API diretamente
 echo "🔌 TESTE DIRETO DA API..."
 echo "-------------------------------------------"
-API_KEY="REDACTED-ROTATED-KEY"
+# Read the key from the environment; never hardcode it (this repo is public).
+# `:?` aborts with a clear message if it is unset instead of calling the API with
+# an empty key. Export it before running, e.g. `export EVOLUTION_API_KEY=...`.
+API_KEY="${EVOLUTION_API_KEY:?set EVOLUTION_API_KEY in the environment before running}"
 
 # Teste local no servidor
 echo "Testando localhost:8080..."
