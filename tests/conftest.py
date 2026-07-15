@@ -46,6 +46,10 @@ def limits(monkeypatch):
         # the validator reads config at runtime rather than baking the cap in at
         # class-definition time.
         "MAX_MESSAGE_LENGTH": 50,
+        # Pin the admin token so /usage-report auth tests are deterministic
+        # regardless of any ADMIN_API_TOKEN in the CI environment (setdefault in
+        # this file does NOT override an env value already set by the workflow).
+        "ADMIN_API_TOKEN": "test-admin-token",
     }
     for key, value in values.items():
         monkeypatch.setattr(config, key, value)
