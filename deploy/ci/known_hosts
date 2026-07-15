@@ -10,3 +10,4 @@
 #
 # Verify the fingerprint matches what your SSH client shows, then paste the output
 # line (NOT starting with '#') below this comment block and commit it.
+45.90.123.190 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF8/8bD9Wu6j4QnAIUHEySR1uz6hvtAF9vNcwql+ZrMm
