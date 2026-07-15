@@ -237,7 +237,29 @@
         port: '22'
         proto: tcp
 
-    - name: Allow HTTP and HTTPS
+    # --- HTTP/HTTPS exposure (stage 3: origin lockdown behind Cloudflare) ---
+    # Gated on `restrict_http_to_cloudflare` (default false). While false, 80/443 are
+    # open to the internet exactly as before. Only flip it to true AFTER the DNS
+    # record is orange-clouded (proxied) and verified, or the origin locks everyone
+    # out. SSH (22) stays open regardless — Cloudflare does not proxy SSH.
+    - name: Fetch Cloudflare edge IP ranges (v4 + v6)
+      uri:
+        url: "{{ item }}"
+        return_content: yes
+      register: cf_ip_lists
+      loop:
+        - https://www.cloudflare.com/ips-v4
+        - https://www.cloudflare.com/ips-v6
+      when: restrict_http_to_cloudflare | default(false) | bool
+
+    - name: Build the Cloudflare CIDR list
+      # join the fetched v4+v6 blobs, then .split() on whitespace/newlines -> flat
+      # CIDR list with no empty entries.
+      set_fact:
+        cloudflare_ips: "{{ (cf_ip_lists.results | map(attribute='content') | join('\n')).split() }}"
+      when: restrict_http_to_cloudflare | default(false) | bool
+
+    - name: Allow HTTP/HTTPS from anywhere (origin NOT yet behind Cloudflare)
       ufw:
         rule: allow
         port: "{{ item }}"
@@ -245,6 +267,27 @@
       loop:
         - '80'
         - '443'
+      when: not (restrict_http_to_cloudflare | default(false) | bool)
+
+    - name: Allow HTTP/HTTPS only from Cloudflare ranges (origin behind Cloudflare)
+      ufw:
+        rule: allow
+        port: "{{ item.1 }}"
+        proto: tcp
+        from_ip: "{{ item.0 }}"
+      loop: "{{ cloudflare_ips | product(['80', '443']) | list }}"
+      when: restrict_http_to_cloudflare | default(false) | bool
+
+    - name: Remove the allow-from-anywhere HTTP/HTTPS rules when locking to Cloudflare
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+        delete: yes
+      loop:
+        - '80'
+        - '443'
+      when: restrict_http_to_cloudflare | default(false) | bool
 
     - name: Deny direct access to app, Qdrant and Redis ports
       ufw:

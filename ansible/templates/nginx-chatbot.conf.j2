@@ -6,6 +6,18 @@ server {
     listen 80;
     server_name {{ chatbot_domain }};
 
+{% if restrict_http_to_cloudflare | default(false) | bool %}
+    # Behind the Cloudflare proxy: take the real client IP from CF-Connecting-IP,
+    # but ONLY trust it when the connection comes from a Cloudflare edge range.
+    # Rendered from Cloudflare's published IP list at deploy time. A request that
+    # does not originate from a CF range keeps its own $remote_addr, so this cannot
+    # be abused to spoof client IPs from outside Cloudflare.
+{% for cidr in cloudflare_ips %}
+    set_real_ip_from {{ cidr }};
+{% endfor %}
+    real_ip_header CF-Connecting-IP;
+{% endif %}
+
     location / {
         # No CORS handling here on purpose: the FastAPI app is the single source of
         # CORS headers (strict allowlist, no credentials). The previous block
