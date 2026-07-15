@@ -1,36 +1,66 @@
 # main.py
+import hmac
 from typing import Any
 
-from fastapi import Depends, FastAPI, Request
-from fastapi.responses import StreamingResponse
+from fastapi import Depends, FastAPI, Header, HTTPException
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import VectorParams, Distance
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from graph_config import graph
-import os
 import logging
 from dotenv import load_dotenv
 import config
 from config import QDRANT_HOST, QDRANT_API_KEY
 from nodes import compute_embedding
 from cache import get_cached_response, set_cached_response
-from cached_responses import detect_cached_intent
 from hashlib import sha256
 import time
-import asyncio
-import json as json_lib
 from deepseek_optimizer import (
     DeepSeekOptimizer,
     begin_request_cost,
     get_request_cost,
 )
-from security import enforce_chat_limits, record_spend
+from security import enforce_chat_limits, record_spend, get_spend_snapshot
 from langfuse_client import create_trace, update_trace, flush_langfuse, evaluate_response, score_trace
 
 load_dotenv()
 
-app = FastAPI()
+
+def docs_kwargs(is_production: bool) -> dict:
+    """
+    FastAPI() kwargs controlling the interactive docs.
+
+    In production the Swagger UI (/docs), ReDoc (/redoc) and the OpenAPI schema
+    (/openapi.json) are turned off: they hand an attacker a full map of the API.
+    Outside production they stay on (framework defaults) for development.
+    """
+    if is_production:
+        return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    return {}
+
+
+app = FastAPI(**docs_kwargs(config.IS_PRODUCTION))
+
+
+async def require_admin(authorization: str = Header(default="")) -> None:
+    """
+    Guard for operator-only endpoints. Expects `Authorization: Bearer <ADMIN_API_TOKEN>`.
+
+    A static bearer token is appropriate here (unlike /chat): this is called
+    server-to-server by the operator, never from the browser, so the token never
+    ships to a client. Fails closed if no token is configured, and uses a
+    constant-time comparison so it can't be brute-forced by timing.
+    """
+    expected = config.ADMIN_API_TOKEN
+    if not expected:
+        logging.error("ADMIN_API_TOKEN is not configured; refusing admin endpoint access")
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    prefix = "Bearer "
+    provided = authorization[len(prefix):] if authorization.startswith(prefix) else ""
+    if not provided or not hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 class ChatRequest(BaseModel):
@@ -81,7 +111,10 @@ async def shutdown_event():
     """Flush Langfuse on app shutdown."""
     flush_langfuse()
 
-# CORS configuration - permitir apenas domínios específicos
+# CORS configuration - permitir apenas domínios específicos.
+# FastAPI is the single source of CORS headers; nginx no longer adds its own.
+# allow_credentials is False (the chatbot uses no cookies, so reflecting credentials
+# was pure downside), and only the verbs the widget actually uses are allowed.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -91,10 +124,9 @@ app.add_middleware(
         "http://localhost:3001",
         "http://localhost:8000"
     ],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["*"],
     max_age=3600,
 )
 
@@ -312,55 +344,14 @@ async def _handle_chat(payload: ChatRequest):
     return response_data
 
 
-@app.post("/chat/stream")
-async def chat_stream(request: Request):
-    """Endpoint de streaming para respostas mais naturais"""
-    body = await request.json()
-    
-    # Extrair campos
-    user_input = body.get("message")
-    user_id = body.get("user_id", "anon") 
-    language = body.get("language", "pt-BR")
-    current_page = body.get("current_page", "/")
-    
-    async def generate():
-        # Primeiro evento: confirmação de recebimento
-        yield f"data: {json_lib.dumps({'type': 'acknowledgment', 'message': 'Recebi sua mensagem! 😊'})}\n\n"
-        await asyncio.sleep(0.5)
-        
-        # Processar mensagem (chamar o fluxo normal)
-        # Aqui você processaria a mensagem normalmente
-        # Por simplicidade, vamos simular uma resposta
-        
-        # Segundo evento: processando
-        yield f"data: {json_lib.dumps({'type': 'thinking', 'message': 'Estou pensando na melhor resposta...'})}\n\n"
-        await asyncio.sleep(1)
-        
-        # Terceiro evento: resposta final em partes
-        if "oi" in user_input.lower() or "olá" in user_input.lower():
-            # Saudação em partes
-            parts = [
-                "Olá! 👋 Eu sou o assistente virtual da WB Digital Solutions.",
-                "Ajudamos empresas a crescer com sites rápidos, automações inteligentes e soluções com IA.",
-                "Me conta o que você precisa — um orçamento, saber mais sobre algum serviço ou tirar dúvidas? 😊"
-            ]
-            
-            for i, part in enumerate(parts):
-                yield f"data: {json_lib.dumps({'type': 'message', 'content': part, 'part': i+1, 'total': len(parts)})}\n\n"
-                await asyncio.sleep(0.8)  # Delay natural entre partes
-        
-        # Evento final
-        yield f"data: {json_lib.dumps({'type': 'complete', 'message': 'Resposta completa'})}\n\n"
-    
-    return StreamingResponse(generate(), media_type="text/event-stream")
-
 @app.get("/usage-report")
-async def get_usage_report():
-    """Endpoint para visualizar relatório de uso e custos da API DeepSeek"""
+async def get_usage_report(_: None = Depends(require_admin)):
+    """Relatório de uso e custos da API DeepSeek. Operator-only (see require_admin)."""
     report = DeepSeekOptimizer.get_usage_report()
     return {
         "status": "success",
         "report": report,
+        "spend": await get_spend_snapshot(),
         "message": f"{'🎉 Desconto de 50% ATIVO!' if report['current_discount'] else '⚠️ Fora do horário de desconto'}"
     }
 
