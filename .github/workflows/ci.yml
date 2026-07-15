@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Um run por ref; cancela o anterior ao empurrar de novo.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── chatbot: pytest (LangGraph/DeepSeek/Qdrant mockados; fakeredis; sem chaves reais). ──
+  # Python 3.11 espelha o Dockerfile de produção (python:3.11-slim).
+  test:
+    name: chatbot (pytest)
+    runs-on: ubuntu-latest
+    env:
+      # Dummies só pra importar módulos em CI — NUNCA chaves reais.
+      # Os testes sobrescrevem tudo isso com fakeredis + stubs (ver tests/conftest.py).
+      DEEPSEEK_API_KEY: ci-dummy
+      QDRANT_HOST: http://localhost:6333
+      QDRANT_API_KEY: ""
+      ADMIN_API_TOKEN: ci-dummy
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Tests (pytest)
+        run: python -m pytest tests/ -q

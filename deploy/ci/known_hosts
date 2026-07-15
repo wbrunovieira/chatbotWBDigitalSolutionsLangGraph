@@ -1,0 +1,12 @@
+# VPS Contabo host key — PINNED for CD (no TOFU / no ssh-keyscan at runtime).
+#
+# This file starts empty on purpose: CD fails loudly until you paste the real key,
+# so a deploy can never trust an unverified host.
+#
+# To populate it, from a machine that ALREADY trusts the VPS (e.g. your laptop that
+# has deployed before), run:
+#
+#     ssh-keyscan -t ed25519 45.90.123.190
+#
+# Verify the fingerprint matches what your SSH client shows, then paste the output
+# line (NOT starting with '#') below this comment block and commit it.

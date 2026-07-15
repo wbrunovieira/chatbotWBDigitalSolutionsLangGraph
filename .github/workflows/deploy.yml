@@ -1,0 +1,144 @@
+name: CD
+
+# Deploy contínuo → VPS Contabo (45.90.123.190) rodando o playbook Ansible.
+# Modelo Ansible (não git-pull): bate com o deploy atual do chatbot — root,
+# /root/chatbot, docker-compose renderizado a partir do template. O playbook é
+# idempotente (certbot --nginx faz no-op em cert válido; apt/ufw/secrets idem).
+#
+# Gates de segurança (espelhado do calendar):
+#   1. Só dispara quando o workflow CI termina VERDE na main (nunca em PR).
+#   2. Environment `production` exige APROVAÇÃO MANUAL (required reviewer).
+#   3. Host key do VPS pinada em deploy/ci/known_hosts (sem TOFU/keyscan em runtime).
+#   4. O inventory é montado a partir de GitHub Secrets — segredo nenhum vive no repo.
+#
+# Pré-requisitos (uma vez, no GitHub deste repo) — ver deploy/ci/README.md:
+#   - Secrets: SSH_DEPLOY_KEY, VPS_HOST, DEEPSEEK_API_KEY,
+#              LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY
+#   - Environment `production` com reviewer obrigatório
+#   - deploy/ci/known_hosts preenchido com a host key real do VPS
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Um deploy por vez; nunca cancela um deploy em andamento.
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy → VPS Contabo (Ansible)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # workflow_run: só se o CI passou. workflow_dispatch: sempre (o environment
+    # ainda exige aprovação manual).
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    environment:
+      name: production
+      url: https://chatbot.wbdigitalsolutions.com
+    env:
+      ANSIBLE_HOST_KEY_CHECKING: "True"
+      ANSIBLE_FORCE_COLOR: "1"
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Assert required secrets are present
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          missing=0
+          for name in SSH_DEPLOY_KEY VPS_HOST DEEPSEEK_API_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing required secret: $name (see deploy/ci/README.md)"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Ansible and required collections
+        run: |
+          pip install "ansible-core>=2.16"
+          # ufw -> community.general ; synchronize -> ansible.posix
+          ansible-galaxy collection install community.general ansible.posix
+
+      # ssh-agent manual (sem action de terceiro tocando a chave privada)
+      - name: Start ssh-agent with deploy key
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+        run: |
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+          ssh-add - <<< "$SSH_DEPLOY_KEY"
+
+      - name: Pin VPS host key (no TOFU)
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          grep -v '^#' deploy/ci/known_hosts > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          if [ ! -s ~/.ssh/known_hosts ]; then
+            echo "::error::deploy/ci/known_hosts is empty — pin the VPS host key (see deploy/ci/README.md)"
+            exit 1
+          fi
+
+      - name: Render inventory from secrets
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+        run: |
+          # Written outside the repo tree so it can never be committed or uploaded.
+          # StrictHostKeyChecking is left ON here (unlike the local inventory example)
+          # because the host key is pinned in ~/.ssh/known_hosts above.
+          cat > "$RUNNER_TEMP/inventory.ci.ini" <<EOF
+          [chatbot_server]
+          wb_server ansible_host=${VPS_HOST} ansible_user=root
+
+          [chatbot_server:vars]
+          ansible_python_interpreter=/usr/bin/python3
+          chatbot_domain=chatbot.wbdigitalsolutions.com
+          ssl_email=admin@wbdigitalsolutions.com
+          enable_ssl=true
+          deepseek_api_key=${DEEPSEEK_API_KEY}
+          langfuse_public_key=${LANGFUSE_PUBLIC_KEY}
+          langfuse_secret_key=${LANGFUSE_SECRET_KEY}
+          langfuse_host=https://calendar-langfuse.wbdigitalsolutions.com
+          app_port=8001
+          qdrant_port=6333
+          redis_port=6380
+          docker_network=wb_network
+          install_path=/root/chatbot
+          data_path=/root/chatbot/volumes
+          EOF
+
+      - name: Ansible syntax check
+        run: ansible-playbook --syntax-check -i "$RUNNER_TEMP/inventory.ci.ini" ansible/playbook.yml
+
+      - name: Deploy (ansible-playbook)
+        run: ansible-playbook -i "$RUNNER_TEMP/inventory.ci.ini" ansible/playbook.yml
+
+      - name: Health check
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://chatbot.wbdigitalsolutions.com/health")
+          echo "GET /health -> $CODE"
+          [ "$CODE" = "200" ]
+
+      - name: Scrub rendered inventory
+        if: always()
+        run: rm -f "$RUNNER_TEMP/inventory.ci.ini"
