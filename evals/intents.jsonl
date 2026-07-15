@@ -1,0 +1,34 @@
+{"message": "boa tarde", "language": "pt-BR", "expected": "greeting", "note": "real prod failure: was off_topic"}
+{"message": "boa tarde", "language": "en", "expected": "greeting", "note": "real prod failure: was off_topic + wrong language"}
+{"message": "bom dia", "language": "pt-BR", "expected": "greeting"}
+{"message": "boa noite", "language": "pt-BR", "expected": "greeting"}
+{"message": "Oi", "language": "pt-BR", "expected": "greeting"}
+{"message": "Olá", "language": "pt-BR", "expected": "greeting"}
+{"message": "e aí", "language": "pt-BR", "expected": "greeting"}
+{"message": "hello", "language": "en", "expected": "greeting"}
+{"message": "hi there", "language": "en", "expected": "greeting"}
+{"message": "hola", "language": "es", "expected": "greeting"}
+{"message": "buenas tardes", "language": "es", "expected": "greeting"}
+{"message": "ciao", "language": "it", "expected": "greeting"}
+{"message": "buongiorno", "language": "it", "expected": "greeting"}
+{"message": "vcs fazem automassao?", "language": "pt-BR", "expected": "inquire_services", "note": "real prod failure: was off_topic (typo for automação)"}
+{"message": "boa tarde, voce desenvolvem app com agentes ?", "language": "pt-BR", "expected": "inquire_services", "note": "greeting + service question -> service wins"}
+{"message": "voces fazem plataformas de ensino ?", "language": "pt-BR", "expected": "inquire_services"}
+{"message": "Preciso de uma automação", "language": "pt-BR", "expected": "inquire_services"}
+{"message": "vcs fazem site?", "language": "pt-BR", "expected": "inquire_services"}
+{"message": "Me explica como funciona a consultoria de IA de vocês?", "language": "pt-BR", "expected": "inquire_services"}
+{"message": "Quero saber mais sobre desenvolvimento de sites", "language": "pt-BR", "expected": "inquire_services"}
+{"message": "Como funciona o processo de desenvolvimento ágil de vocês?", "language": "pt-BR", "expected": "inquire_services"}
+{"message": "do you build AI agents?", "language": "en", "expected": "inquire_services"}
+{"message": "Quanto custa um site?", "language": "pt-BR", "expected": "request_quote"}
+{"message": "qual o preço de um e-commerce?", "language": "pt-BR", "expected": "request_quote"}
+{"message": "how much for a landing page?", "language": "en", "expected": "request_quote"}
+{"message": "quero um orçamento", "language": "pt-BR", "expected": "request_quote"}
+{"message": "qual o whatsapp de vocês?", "language": "pt-BR", "expected": "share_contact"}
+{"message": "como falo com vocês?", "language": "pt-BR", "expected": "share_contact"}
+{"message": "quero falar com um atendente", "language": "pt-BR", "expected": "chat_with_agent"}
+{"message": "posso falar com uma pessoa de verdade?", "language": "pt-BR", "expected": "chat_with_agent"}
+{"message": "What's the weather like today?", "language": "en", "expected": "off_topic", "note": "genuinely off-topic (correct today)"}
+{"message": "Quanto é 2 + 2?", "language": "pt-BR", "expected": "off_topic"}
+{"message": "Qual a capital do Brasil?", "language": "pt-BR", "expected": "off_topic"}
+{"message": "que horas são?", "language": "pt-BR", "expected": "off_topic"}

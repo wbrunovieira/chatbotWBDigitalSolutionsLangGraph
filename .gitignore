@@ -89,3 +89,8 @@ ansible/host_vars/
 # Arquivos de backup
 *.backup
 *.bak.yml
+# Internal planning docs — kept local, not published
+docs/plans/
+
+# The eval dataset must be versioned (overrides the *.jsonl rule above)
+!evals/*.jsonl

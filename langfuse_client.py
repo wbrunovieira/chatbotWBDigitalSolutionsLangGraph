@@ -15,24 +15,19 @@ _langfuse_client = None
 LOCAL_PROMPTS = {
     "detect_intent": {
         "type": "text",
-        "template": """Analyze this message and determine if it's related to business/technology services or not.
-
-Context: WB Digital Solutions provides websites, automation, and AI solutions for businesses.
+        "template": """Classify the intent of this chatbot message. WB Digital Solutions builds websites, e-commerce, automation, AI solutions and AI agents, and e-learning / EAD platforms.
 
 Message: "{user_input}"
 
-Question: Is this message asking about business services, technology, websites, automation, AI, pricing, or contacting the company?
+Messages are short and may have typos or missing accents ("automassao" = automação). Classify by intent, not spelling:
+- greeting: a social greeting with no other request, including time-of-day greetings ("bom dia", "boa tarde", "boa noite", "hello", "hola", "ciao"). A greeting is NEVER off_topic.
+- request_quote: asks about price or budget ("quanto custa", "preço", "how much").
+- inquire_services: any interest in what WB does, even misspelled ("vcs fazem automassao?", "app com agentes", "plataforma de ensino").
+- share_contact: wants contact info (whatsapp, email, telefone).
+- chat_with_agent: wants to talk to a human.
+- off_topic: ONLY trivia unrelated to WB's business (weather, math, general knowledge). When unsure between a service intent and off_topic, choose the service intent.
 
-If YES (related to business/tech): determine the specific intent:
-- "greeting" if just saying hello
-- "inquire_services" if asking about services
-- "request_quote" if asking about prices
-- "chat_with_agent" if wants human contact
-- "schedule_meeting" if wants to schedule
-
-If NO (NOT related): return "off_topic"
-
-Return ONLY the intent word, nothing else:""",
+Respond with ONLY a JSON object, no prose: {{"intent": "<greeting|request_quote|inquire_services|share_contact|chat_with_agent|off_topic>"}}""",
     },
     "generate_response_instruction": {
         "type": "text",

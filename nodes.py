@@ -1,5 +1,6 @@
 # nodes.py
 import httpx
+import json
 import re
 import time
 import uuid
@@ -43,6 +44,71 @@ def compute_embedding(text: str) -> list:
     return embeddings[0].tolist()
 
 
+# Order matters: off_topic is LAST so that if a service word also appears we prefer the
+# service intent — a sales bot must never deflect a real inquiry to off_topic.
+VALID_INTENTS = [
+    "greeting",
+    "request_quote",
+    "inquire_services",
+    "share_contact",
+    "chat_with_agent",
+    "off_topic",
+]
+DEFAULT_INTENT = "inquire_services"
+
+
+def _exact_intent(value) -> str | None:
+    if isinstance(value, str) and value.strip().lower() in VALID_INTENTS:
+        return value.strip().lower()
+    return None
+
+
+def parse_intent(raw: str) -> str:
+    """
+    Robustly extract the intent from the classifier output.
+
+    Tolerant to a JSON object ({"intent": "..."}), a bare word, or messy prose, so the
+    code doesn't break if the prompt/response format drifts.
+
+    A structured, exact match wins first: if the model returns
+    {"intent": "request_quote", "reason": "not just a greeting"}, we must return
+    request_quote — NOT let the word "greeting" inside the reasoning field hijack it.
+    Only when there is no exact intent value do we fall back to a greedy substring scan
+    over the raw text (off_topic last, so a stray service word wins). Falls back to
+    inquire_services rather than off_topic — assuming a service question is the safer
+    default for a sales bot.
+    """
+    if not raw:
+        return DEFAULT_INTENT
+
+    try:
+        obj = json.loads(raw)
+    except (ValueError, TypeError):
+        obj = None
+
+    if isinstance(obj, dict):
+        # Prefer the canonical keys, then any value that is exactly a valid intent.
+        for key in ("intent", "result", "label", "category"):
+            hit = _exact_intent(obj.get(key))
+            if hit:
+                return hit
+        for value in obj.values():
+            hit = _exact_intent(value)
+            if hit:
+                return hit
+    else:
+        hit = _exact_intent(obj if isinstance(obj, str) else raw)
+        if hit:
+            return hit
+
+    # Fallback: greedy scan over the raw text only (never the parsed sub-fields).
+    norm = re.sub(r"[^a-z]+", "_", raw.lower())
+    for intent in VALID_INTENTS:
+        if intent in norm:
+            return intent
+    return DEFAULT_INTENT
+
+
 async def detect_intent(state: dict) -> dict:
     """
     Detecta intent usando prompt do Langfuse.
@@ -65,9 +131,16 @@ async def detect_intent(state: dict) -> dict:
             # Fallback se compile falhar (variáveis não existem no prompt)
             prompt = intent_prompt.compile(user_input=user_input)
     else:
-        # Hardcoded fallback if no prompt available
-        prompt = f"""Classify intent for: "{user_input}"
-Return ONLY: greeting, inquire_services, request_quote, chat_with_agent, share_contact, or off_topic"""
+        # Hardcoded fallback if no prompt available. Asks for JSON to match the
+        # response_format below (DeepSeek's json_object mode requires "json" in the prompt).
+        prompt = f"""Classify the intent of this message for a digital-services chatbot: "{user_input}"
+
+A time-of-day greeting ("bom dia", "boa tarde", "boa noite", "good evening") is a
+greeting. Anything about websites, e-commerce, automation, AI/agents or e-learning —
+even misspelled — is inquire_services (or request_quote if it asks about price), never
+off_topic.
+
+Respond with ONLY JSON: {{"intent": "<greeting|request_quote|inquire_services|share_contact|chat_with_agent|off_topic>"}}"""
 
     intent = "inquire_services"  # default
     trace = state.get("langfuse_trace")
@@ -85,6 +158,18 @@ Return ONLY: greeting, inquire_services, request_quote, chat_with_agent, share_c
             prompt=intent_prompt,
         )
 
+        request_body = {
+            "model": "deepseek-chat",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.1,
+        }
+        # DeepSeek's json_object mode 400s unless the prompt contains the word "json".
+        # Only request it when the (possibly Langfuse-served, possibly stale) prompt
+        # actually asks for JSON; otherwise let parse_intent handle free text. This
+        # keeps a prompt/code mismatch from silently breaking intent detection.
+        if "json" in prompt.lower():
+            request_body["response_format"] = {"type": "json_object"}
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 "https://api.deepseek.com/v1/chat/completions",
@@ -93,11 +178,7 @@ Return ONLY: greeting, inquire_services, request_quote, chat_with_agent, share_c
                     "Content-Type": "application/json",
                     **optimization_headers
                 },
-                json={
-                    "model": "deepseek-chat",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.1
-                }
+                json=request_body,
             )
         data = response.json()
 
@@ -109,14 +190,14 @@ Return ONLY: greeting, inquire_services, request_quote, chat_with_agent, share_c
                 cache_hit=response.headers.get("X-Cache-Status") == "hit"
             )
 
-        raw_intent = data["choices"][0]["message"]["content"].strip().lower()
+        # Guard against API errors (429/500 return JSON without "choices" -> KeyError).
+        try:
+            raw_intent = data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError):
+            logging.error("detect_intent: unexpected DeepSeek response: %s", str(data)[:200])
+            raw_intent = ""
 
-        # Extrair intent válido da resposta
-        valid_intents = {"greeting", "request_quote", "inquire_services", "chat_with_agent", "share_contact", "off_topic"}
-        for valid in valid_intents:
-            if valid in raw_intent:
-                intent = valid
-                break
+        intent = parse_intent(raw_intent)
 
         # End generation AFTER LLM call (captures end time)
         end_llm_generation(

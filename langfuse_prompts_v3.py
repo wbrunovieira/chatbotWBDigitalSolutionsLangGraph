@@ -25,38 +25,61 @@ PROMPTS_V3 = {
     # ========== DETECÇÃO DE INTENT ==========
     "detect_intent": {
         "type": "text",
-        "prompt": """Classify the user's intent for WB Digital Solutions chatbot.
+        "prompt": """Classify the user's intent for the WB Digital Solutions chatbot.
 
-Company services: websites, e-commerce, automation, AI solutions, EAD platforms.
+Company services: websites, e-commerce, automation, AI solutions and AI agents,
+e-learning / EAD platforms.
 
 User message: "{{user_input}}"
 User language: {{language}}
 Current page: {{current_page}}
 
+Messages are short, informal, and often contain typos, abbreviations (vc, vcs, pq),
+missing accents, or spelling mistakes ("automassao" = automação). Classify by INTENT,
+not by spelling.
+
 CLASSIFICATION RULES:
 
-1. **greeting** - Simple greetings without questions:
-   - "Oi", "Olá", "Hi", "Hello", "Hola", "Ciao"
-   - NOT if includes question: "Oi, quanto custa?" → request_quote
+1. **greeting** - A social greeting with NO other request. Includes time-of-day
+   greetings in any language:
+   - pt: "oi", "olá", "bom dia", "boa tarde", "boa noite", "e aí"
+   - en: "hi", "hello", "hey", "good morning/afternoon/evening"
+   - es: "hola", "buenos días", "buenas tardes/noches"
+   - it: "ciao", "buongiorno", "buonasera"
+   - If the message is a greeting AND also asks something, use the OTHER intent:
+     "boa tarde, quanto custa?" → request_quote
 
-2. **request_quote** - Asking about PRICES or BUDGET:
+2. **request_quote** - Asking about PRICE or BUDGET:
    - "quanto custa", "preço", "valor", "orçamento", "how much", "price", "cost"
 
-3. **inquire_services** - Questions about SERVICES, FEATURES, TIMELINES:
-   - "quais serviços", "vocês fazem", "quanto tempo", "como funciona"
-   - Questions about specific services (websites, automation, AI, EAD)
+3. **inquire_services** - Any question or interest about WHAT WB DOES — services,
+   features, timelines, process — even if misspelled or just "do you do X?":
+   - "quais serviços", "vocês fazem X", "vcs fazem site/automassao?", "quanto tempo",
+     "como funciona", "quero uma automação", "app com agentes", "plataforma de ensino"
 
 4. **share_contact** - Wants CONTACT INFO:
-   - "como falo com vocês", "contato", "whatsapp", "telefone"
+   - "como falo com vocês", "contato", "whatsapp", "telefone", "email"
 
 5. **chat_with_agent** - Wants to talk to a HUMAN:
-   - "falar com humano", "atendente", "pessoa real"
+   - "falar com humano", "atendente", "pessoa real", "quero falar com alguém"
 
-6. **off_topic** - UNRELATED to business/tech:
-   - General knowledge, math, weather, sports, etc.
-   - "capital do Brasil", "2+2", "que horas são"
+6. **off_topic** - ONLY topics with NO relation to WB's business:
+   - general trivia, math, weather, sports: "capital do Brasil", "2+2", "que horas são"
+   - A greeting is NEVER off_topic. Anything about websites, e-commerce, automation,
+     AI, agents, or e-learning is NEVER off_topic (classify it as inquire_services or
+     request_quote instead). When unsure between a service intent and off_topic,
+     choose the service intent.
 
-Return ONLY one word: greeting, request_quote, inquire_services, share_contact, chat_with_agent, off_topic""",
+Examples:
+- "boa tarde" → greeting
+- "bom dia" → greeting
+- "vcs fazem automassao?" → inquire_services
+- "boa tarde, voce desenvolvem app com agentes?" → inquire_services
+- "quanto custa um site?" → request_quote
+- "qual a capital do Brasil?" → off_topic
+
+Respond with ONLY a JSON object, no prose:
+{"intent": "<one of: greeting, request_quote, inquire_services, share_contact, chat_with_agent, off_topic>"}""",
         "config": {"model": "deepseek-chat", "temperature": 0.1},
     },
 
