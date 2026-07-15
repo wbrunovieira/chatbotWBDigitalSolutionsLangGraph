@@ -2,6 +2,9 @@
 
 > Production AI assistant powering the [WB Digital Solutions](https://www.wbdigitalsolutions.com) website — a stateful **LangGraph** agent with RAG over a company knowledge base, conversation memory, multi-layer caching, and full **Langfuse** observability. Built to ship, not to demo.
 
+[![CI](https://github.com/wbrunovieira/chatbotWBDigitalSolutionsLangGraph/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/wbrunovieira/chatbotWBDigitalSolutionsLangGraph/actions/workflows/ci.yml)
+[![CD](https://github.com/wbrunovieira/chatbotWBDigitalSolutionsLangGraph/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/wbrunovieira/chatbotWBDigitalSolutionsLangGraph/actions/workflows/deploy.yml)
+
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-0.3-1C3C3C?logo=langchain&logoColor=white)
@@ -56,7 +59,8 @@ flowchart TD
 ## Tech stack
 
 - **Orchestration:** LangGraph `StateGraph` (LangChain 0.3) with conditional routing + fast-track paths.
-- **API:** FastAPI + Uvicorn, CORS-scoped, streaming-ready, `/health` + `/chat` endpoints.
+- **API:** FastAPI + Uvicorn behind an nginx reverse proxy, strict CORS allowlist, `/health` + `/chat` endpoints.
+- **Abuse & cost controls:** per-IP rate limiting + a daily spend circuit-breaker (both Redis-backed), request-size caps, and an admin-token-gated `/usage-report`. See [Security](#security--abuse-controls).
 - **LLM:** DeepSeek (`deepseek-chat`) over the OpenAI-compatible REST API.
 - **Embeddings:** FastEmbed (ONNX `all-MiniLM-L6-v2`) — **no PyTorch**, keeping the image lightweight.
 - **Vector DB / RAG + memory:** Qdrant (`company_info` knowledge base + `chat_logs` conversation history).
@@ -114,6 +118,40 @@ docker run -p 8000:8000 --env-file .env wb-chatbot
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_DB` | Redis cache (defaults: `localhost` / `6379` / `0`) |
 | `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_HOST` | Langfuse observability |
 
+## Security & abuse controls
+
+The chatbot is called straight from the browser, so it's designed assuming the
+endpoint is public and hostile. Controls, from outer to inner:
+
+- **Rate limiting** — per-IP fixed-window limits (per minute and per hour), backed
+  by Redis so they hold across workers and restarts.
+- **Spend circuit-breaker** — a hard daily USD cap (global + per-IP) on DeepSeek
+  spend. Once crossed, `/chat` returns `503` *before* calling the LLM, so abuse can
+  never turn into an invoice. A one-per-day alert fires at 70% of the cap.
+- **Request-size caps** — `message` is length-limited at the app and body size is
+  capped at nginx (64k), defusing the token-amplification vector (one `/chat` call
+  fans out into up to 3 LLM calls).
+- **Strict CORS** — a fixed origin allowlist owned solely by the app (nginx adds no
+  CORS of its own); no credentials, only the verbs the widget uses.
+- **Locked-down infra** — Qdrant and Redis are on the internal Docker network only
+  (never published), the app binds to loopback behind nginx, secrets are generated
+  on the host and kept `0600`, and UFW default-denies inbound as defense in depth.
+- **Reduced surface** — interactive docs (`/docs`, `/redoc`, `/openapi.json`) are
+  disabled in production, and `/usage-report` sits behind an admin bearer token.
+
+## Tests & CI/CD
+
+- **Tests** — a `pytest` suite ([`tests/`](tests/)) covers the `/chat` frontend
+  contract, rate limiting, the spend cap, per-request cost accounting, and the
+  hardening above. Everything runs against `fakeredis` with the LLM/vector layer
+  stubbed — no network, no keys, no spend.
+- **CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) — runs the suite
+  on every push and PR to `main`.
+- **CD** ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)) — on green
+  CI, runs the Ansible playbook against the VPS, gated by a manual-approval
+  `production` environment with the VPS host key pinned. Setup lives in
+  [`deploy/ci/README.md`](deploy/ci/README.md).
+
 ## Deployment
 
 Infrastructure is codified under [`ansible/`](ansible/): playbooks provision an nginx reverse proxy with Let's Encrypt SSL and run the app via `docker-compose` on the target host. See [`ansible/README.md`](ansible/README.md) and [`ansible/deploy.sh`](ansible/deploy.sh).
@@ -121,15 +159,18 @@ Infrastructure is codified under [`ansible/`](ansible/): playbooks provision an 
 ## Repository layout
 
 ```
-main.py              FastAPI app + request lifecycle (cache → graph → trace)
+main.py              FastAPI app + request lifecycle (limits → cache → graph → trace)
 graph_config.py      LangGraph StateGraph wiring + conditional routing
 nodes.py             Graph nodes: intent, retrieval, generation, revision, logging
-deepseek_optimizer.py  Token/usage optimization + skip-call heuristics
+security.py          Per-IP rate limiting + daily spend circuit-breaker (Redis)
+deepseek_optimizer.py  Token/usage optimization, per-request cost accounting
 langfuse_*.py        Langfuse client, tracing, scoring, versioned prompts (v1–v3)
 cache.py / cached_responses.py  Redis caching + pattern cache
 config.py            Environment configuration
+tests/               pytest suite (contract, rate limit, spend cap, hardening)
+.github/workflows/   CI (pytest) + CD (Ansible deploy with approval gate)
 experiments/         Offline evaluation harness + datasets
-ansible/             IaC: nginx, SSL, docker-compose deploy
+ansible/             IaC: nginx, SSL, docker-compose deploy, UFW
 docs/                API, deployment and optimization documentation
 ```
 
@@ -138,7 +179,9 @@ docs/                API, deployment and optimization documentation
 - **Graph-structured, not prompt-spaghetti** — routing and fast-tracking are explicit edges, so behavior is inspectable and each node is unit-tested (`experiments/`).
 - **RAG + persistent memory** — company knowledge and past conversations are both vector-retrieved, so answers are grounded and context-aware across sessions.
 - **Production observability** — every turn is traced and scored in Langfuse, and prompts are versioned there rather than hard-coded.
-- **Cost-aware by design** — Redis short-circuiting + the DeepSeek optimizer cut redundant LLM spend.
+- **Cost-aware by design** — Redis short-circuiting + the DeepSeek optimizer cut redundant LLM spend, and a daily spend circuit-breaker caps worst-case cost under abuse.
+- **Hardened for a public endpoint** — per-IP rate limiting, request-size caps, strict CORS, and locked-down infra (Qdrant/Redis off the public internet, docs disabled in prod).
+- **Tested & continuously deployed** — a mocked `pytest` suite gates every push via CI, and CD ships to production through a manual-approval Ansible pipeline.
 - **Lightweight & reproducible** — ONNX embeddings (no PyTorch) and a slim Docker image, deployed via Ansible IaC.
 
 ---
