@@ -11,10 +11,13 @@ enable_ssl=true
 
 # Variáveis de ambiente para produção
 deepseek_api_key=YOUR_DEEPSEEK_API_KEY_HERE
-qdrant_api_key=generate_on_deploy
-redis_password=generate_on_deploy
+# Note: qdrant_api_key, redis_password and admin_api_token are NOT set here. They are
+# generated on the target on first deploy and persisted under {{ install_path }}/.secrets/
+# (mode 0600). Re-running the playbook reuses them instead of rotating them.
 
-# Configurações de portas (ajustadas para evitar conflitos com containers existentes)
+# Configurações de portas
+# These ports are bound to loopback (app) or kept off the host entirely (Qdrant,
+# Redis). UFW additionally denies them from the internet as defense in depth.
 app_port=8001
 qdrant_port=6333
 redis_port=6380
@@ -25,3 +28,12 @@ docker_network=wb_network
 # Caminhos de instalação
 install_path=/root/chatbot
 data_path=/root/chatbot/volumes
+
+# --- Abuse and cost controls (optional; these are the defaults) ---
+# daily_spend_limit_usd=5.0
+# daily_spend_limit_per_ip_usd=0.50
+# spend_alert_threshold=0.70
+# rate_limit_enabled=true
+# rate_limit_per_minute=10
+# rate_limit_per_hour=100
+# max_message_length=1000

@@ -60,10 +60,56 @@
       command: docker network create {{ docker_network }}
       when: docker_network not in docker_networks.stdout_lines
 
-    - name: Generate secure passwords if not provided
+    # Secrets are generated ON the target, once, and persisted. The previous
+    # `set_fact | default(lookup('password', '/dev/null'))` never fired, because the
+    # inventory defines these vars as the literal string "generate_on_deploy" — so
+    # `default()` saw them as already-set and the "password" would have been the
+    # placeholder itself. `/dev/null` also meant a fresh value on every run, which
+    # would have rotated the credentials out from under the running containers.
+    - name: Create secrets directory
+      file:
+        path: "{{ install_path }}/.secrets"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Generate secrets on first deploy only
+      shell: "umask 077 && openssl rand -hex 32 > {{ install_path }}/.secrets/{{ item }}"
+      args:
+        creates: "{{ install_path }}/.secrets/{{ item }}"
+      loop:
+        - redis_password
+        - qdrant_api_key
+        - admin_api_token
+
+    - name: Enforce permissions on secret files
+      file:
+        path: "{{ install_path }}/.secrets/{{ item }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop:
+        - redis_password
+        - qdrant_api_key
+        - admin_api_token
+
+    - name: Read persisted secrets
+      slurp:
+        src: "{{ install_path }}/.secrets/{{ item }}"
+      register: chatbot_secrets
+      no_log: true
+      loop:
+        - redis_password
+        - qdrant_api_key
+        - admin_api_token
+
+    - name: Resolve secrets into facts
       set_fact:
-        redis_password: "{{ redis_password | default(lookup('password', '/dev/null length=32 chars=ascii_letters,digits')) }}"
-        qdrant_api_key: "{{ qdrant_api_key | default(lookup('password', '/dev/null length=32 chars=ascii_letters,digits')) }}"
+        resolved_redis_password: "{{ chatbot_secrets.results[0].content | b64decode | trim }}"
+        resolved_qdrant_api_key: "{{ chatbot_secrets.results[1].content | b64decode | trim }}"
+        resolved_admin_api_token: "{{ chatbot_secrets.results[2].content | b64decode | trim }}"
+      no_log: true
 
     - name: Remove ALL old compose files FIRST
       file:
@@ -173,6 +219,49 @@
       delay: 10
       ignore_errors: yes
 
+    # Defense in depth ONLY. UFW is not what closes Qdrant/Redis: Docker publishes
+    # ports by writing straight to the DOCKER-USER iptables chain, which UFW does not
+    # filter, so a `ufw deny 6333` on a published container port is a no-op. What
+    # actually closes them is removing `ports:` from docker-compose.prod.yml.j2.
+    # These rules protect host-level services and catch a future accidental re-publish
+    # of a port on the host itself.
+    - name: Install UFW
+      apt:
+        name: ufw
+        state: present
+        update_cache: yes
+
+    - name: Allow SSH before enabling the firewall
+      ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+
+    - name: Allow HTTP and HTTPS
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop:
+        - '80'
+        - '443'
+
+    - name: Deny direct access to app, Qdrant and Redis ports
+      ufw:
+        rule: deny
+        port: "{{ item }}"
+        proto: tcp
+      loop:
+        - "{{ app_port }}"
+        - "{{ qdrant_port }}"
+        - "{{ redis_port }}"
+
+    - name: Enable UFW with default-deny on inbound traffic
+      ufw:
+        state: enabled
+        default: deny
+        direction: incoming
+
     - name: Install Nginx and Certbot
       apt:
         name:
@@ -240,10 +329,12 @@
           - "Deployment completed successfully!"
           - "=========================================="
           - "HTTPS URL: https://{{ chatbot_domain }}"
-          - "HTTP URL: http://{{ chatbot_domain }}"
-          - "Direct Access: http://{{ ansible_host }}:{{ app_port }}"
           - "=========================================="
-          - "Qdrant Dashboard: http://{{ ansible_host }}:{{ qdrant_port }}/dashboard"
+          - "Qdrant and Redis are NOT reachable from the internet any more."
+          - "Qdrant dashboard, from your machine, over an SSH tunnel:"
+          - "  ssh -L 6333:chatbot_qdrant:6333 root@{{ ansible_host }}"
+          - "  then open http://localhost:6333/dashboard"
+          - "  (API key: cat {{ install_path }}/.secrets/qdrant_api_key)"
           - "=========================================="
           - "Test the API:"
           - "curl https://{{ chatbot_domain }}/health"

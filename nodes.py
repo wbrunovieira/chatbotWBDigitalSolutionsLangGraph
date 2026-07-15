@@ -13,8 +13,20 @@ from deepseek_optimizer import DeepSeekOptimizer, estimate_tokens, should_skip_a
 from langfuse_client import start_llm_generation, end_llm_generation, get_prompt, evaluate_response, score_trace
 
 
-# FastEmbed - lightweight ONNX-based embeddings (no PyTorch required)
-embedding_model = TextEmbedding("sentence-transformers/all-MiniLM-L6-v2")
+# FastEmbed - lightweight ONNX-based embeddings (no PyTorch required).
+#
+# Built lazily: instantiating TextEmbedding downloads the ONNX model, and doing that
+# at import time means merely importing this module hits the network.
+EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+_embedding_model = None
+
+
+def get_embedding_model() -> TextEmbedding:
+    global _embedding_model
+    if _embedding_model is None:
+        _embedding_model = TextEmbedding(EMBEDDING_MODEL_NAME)
+    return _embedding_model
+
 
 def compute_embedding(text: str) -> list:
     """
@@ -27,7 +39,7 @@ def compute_embedding(text: str) -> list:
         text = text[:max_length * 4]
 
     # FastEmbed retorna um generator, pegamos o primeiro resultado
-    embeddings = list(embedding_model.embed([text]))
+    embeddings = list(get_embedding_model().embed([text]))
     return embeddings[0].tolist()
 
 

@@ -6,10 +6,45 @@ Otimizações para reduzir custos da API DeepSeek
 - Monitoramento de custos
 """
 
+import contextvars
 from datetime import datetime
 import pytz
 import logging
-from typing import Dict, Tuple, Optional
+from typing import Dict, Optional, Tuple
+
+# --- Per-request cost accumulator ---
+#
+# Feeds the spend cap in security.py: every DeepSeek call routed through
+# update_usage() bills its cost to the /chat request that triggered it.
+#
+# The ContextVar holds a MUTABLE dict, not a float, and that is load-bearing.
+# LangGraph may run graph nodes in child asyncio tasks, and a child task receives a
+# *copy* of the context — so a plain `ContextVar.set(float)` inside a node would
+# write to the copy and the request handler would read back 0.0, silently disabling
+# the spend cap. A dict is shared by reference across those copies, so writes from
+# any node are visible to the handler.
+_request_cost: contextvars.ContextVar = contextvars.ContextVar("request_cost")
+
+
+def begin_request_cost() -> dict:
+    """Start a fresh cost accumulator for the current request."""
+    box = {"usd": 0.0}
+    _request_cost.set(box)
+    return box
+
+
+def add_request_cost(usd: float) -> None:
+    """Bill `usd` to the in-flight request. No-op outside a request context."""
+    box = _request_cost.get(None)
+    if box is not None:
+        box["usd"] += usd
+
+
+def get_request_cost() -> float:
+    """Total USD spent by the in-flight request so far."""
+    box = _request_cost.get(None)
+    return box["usd"] if box else 0.0
+
 
 class DeepSeekOptimizer:
     """Gerencia otimizações de custo para API DeepSeek"""
@@ -160,7 +195,10 @@ class DeepSeekOptimizer:
             cost, savings = DeepSeekOptimizer.estimate_cost(
                 input_tokens, output_tokens, cache_hit
             )
-            
+
+            # Bill this call to the in-flight /chat request so the spend cap sees it.
+            add_request_cost(cost)
+
             discount_active = DeepSeekOptimizer.is_discount_time()
             brazil_time = DeepSeekOptimizer.get_brazil_time()
             

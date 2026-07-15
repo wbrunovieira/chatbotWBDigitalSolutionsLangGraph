@@ -1,13 +1,17 @@
 # main.py
-from fastapi import FastAPI, Request
+from typing import Any
+
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import StreamingResponse
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import VectorParams, Distance
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from graph_config import graph
 import os
 import logging
 from dotenv import load_dotenv
+import config
 from config import QDRANT_HOST, QDRANT_API_KEY
 from nodes import compute_embedding
 from cache import get_cached_response, set_cached_response
@@ -16,12 +20,60 @@ from hashlib import sha256
 import time
 import asyncio
 import json as json_lib
-from deepseek_optimizer import DeepSeekOptimizer
+from deepseek_optimizer import (
+    DeepSeekOptimizer,
+    begin_request_cost,
+    get_request_cost,
+)
+from security import enforce_chat_limits, record_spend
 from langfuse_client import create_trace, update_trace, flush_langfuse, evaluate_response, score_trace
 
 load_dotenv()
 
 app = FastAPI()
+
+
+class ChatRequest(BaseModel):
+    """
+    The payload the site widget posts. Field names and defaults ARE the contract with
+    the frontend — changing them breaks the live chat.
+
+    - extra="ignore": the site can add a field without 422-ing the backend.
+    - coerce_numbers_to_str: some widget builds send Date.now() / numeric ids.
+    - The length caps are the real point: before them, nginx accepted a 10MB body and
+      one /chat request fanned it out into up to 3 DeepSeek calls.
+    """
+
+    model_config = ConfigDict(extra="ignore", coerce_numbers_to_str=True)
+
+    message: str
+    user_id: str = Field(default="anon", max_length=128)
+    language: str = Field(default="pt-BR", max_length=16)
+    current_page: str = Field(default="/", max_length=256)
+    page_url: str = Field(default="", max_length=2048)
+    timestamp: Any = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def treat_null_as_missing(cls, data: Any) -> Any:
+        # The old handler read the body with body.get(key, default), so an explicit
+        # null behaved exactly like an absent key. Preserve that, or a widget that
+        # sends "page_url": null starts getting 422s.
+        if isinstance(data, dict):
+            return {key: value for key, value in data.items() if value is not None}
+        return data
+
+    @field_validator("message")
+    @classmethod
+    def validate_message(cls, value: str) -> str:
+        # Read from `config` at validation time (not as a Field(max_length=...) bound
+        # at class-definition time) so MAX_MESSAGE_LENGTH stays runtime-configurable.
+        value = value.strip()
+        if not value:
+            raise ValueError("message must not be empty")
+        if len(value) > config.MAX_MESSAGE_LENGTH:
+            raise ValueError(f"message must be at most {config.MAX_MESSAGE_LENGTH} characters")
+        return value
 
 
 @app.on_event("shutdown")
@@ -51,17 +103,26 @@ async def health():
     return {"status": "healthy"}
 
 @app.post("/chat")
-async def chat(request: Request):
-    body = await request.json()
-    
-    # Extrair todos os campos enviados pelo frontend
-    user_input = body.get("message")
-    user_id = body.get("user_id", "anon")
-    language = body.get("language", "pt-BR")
-    current_page = body.get("current_page", "/")
-    page_url = body.get("page_url", "")
-    timestamp = body.get("timestamp", "")
-    
+async def chat(payload: ChatRequest, client_ip: str = Depends(enforce_chat_limits)):
+    # enforce_chat_limits already raised 429/503 if this IP is over its rate limit or
+    # the daily budget is spent. Being here means the request is allowed to cost money.
+    begin_request_cost()
+    try:
+        return await _handle_chat(payload)
+    finally:
+        # In a finally block so a request that dies mid-graph still bills whatever
+        # DeepSeek calls it already made — a crashing request is not a free one.
+        await record_spend(client_ip, get_request_cost())
+
+
+async def _handle_chat(payload: ChatRequest):
+    user_input = payload.message
+    user_id = payload.user_id
+    language = payload.language
+    current_page = payload.current_page
+    page_url = payload.page_url
+    timestamp = payload.timestamp
+
     # Log dos dados recebidos para debug
     logging.info(f"Request received - User: {user_id}, Language: {language}, Page: {current_page}")
 

@@ -28,8 +28,12 @@ pip install ansible
 
 2. Configurar as credenciais em `inventory.ini`:
    - `deepseek_api_key`: Sua chave API do DeepSeek
-   - `qdrant_api_key`: Chave API para o Qdrant (será gerada automaticamente se não fornecida)
-   - `redis_password`: Senha do Redis (será gerada automaticamente se não fornecida)
+   - `langfuse_public_key` / `langfuse_secret_key`: credenciais do Langfuse
+
+   O `qdrant_api_key`, o `redis_password` e o `admin_api_token` **não** são
+   configurados aqui: são gerados no servidor no primeiro deploy e persistidos em
+   `{{ install_path }}/.secrets/` (modo 0600). Re-rodar o playbook reaproveita os
+   mesmos valores em vez de rotacioná-los.
 
 ## Deploy
 
