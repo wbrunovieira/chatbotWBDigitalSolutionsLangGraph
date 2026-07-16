@@ -15,33 +15,27 @@ import os
 import sys
 from pathlib import Path
 
-import httpx
-
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+import _deepseek  # noqa: E402 — evals/_deepseek.py (resilient DeepSeek call)
 from nodes import TOOL_SYSTEM_PROMPT  # noqa: E402
 from tools import TOOL_SPECS  # noqa: E402
 
 
 def picked_tool(message: str):
     body = {
-        "model": "deepseek-chat",
+        "model": "deepseek-chat",  # floating vendor pointer — weights can change server-side
         "messages": [
             {"role": "system", "content": TOOL_SYSTEM_PROMPT},
             {"role": "user", "content": message},
         ],
         "tools": TOOL_SPECS,
         "tool_choice": "auto",
-        "temperature": 0.2,
+        "temperature": 0,  # deterministic, so a gate red is a real change, not sampling noise
     }
-    resp = httpx.post(
-        "https://api.deepseek.com/v1/chat/completions",
-        headers={"Authorization": f"Bearer {os.environ['DEEPSEEK_API_KEY']}", "Content-Type": "application/json"},
-        json=body,
-        timeout=30.0,
-    )
-    msg = resp.json()["choices"][0]["message"]
+    data = _deepseek.chat(body)
+    msg = data["choices"][0]["message"]
     calls = msg.get("tool_calls") or []
     return calls[0]["function"]["name"] if calls else None
 
@@ -60,12 +54,17 @@ def main() -> int:
 
     rows = [json.loads(line) for line in Path(args.dataset).read_text(encoding="utf-8").splitlines() if line.strip()]
     passed, fails = 0, []
-    for r in rows:
-        got = picked_tool(r["message"])
-        if is_ok(r["expected_tool"], got):
-            passed += 1
-        else:
-            fails.append((r["message"], r["expected_tool"], got))
+    try:
+        for r in rows:
+            got = picked_tool(r["message"])
+            if is_ok(r["expected_tool"], got):
+                passed += 1
+            else:
+                fails.append((r["message"], r["expected_tool"], got))
+    except _deepseek.InfraError as e:
+        # Infra problem, NOT a quality regression — exit 2 so a red build is legible & re-runnable.
+        print(f"::error::eval aborted (infra, not a regression): {e}")
+        return 2
 
     accuracy = passed / len(rows) if rows else 0.0
     print(f"tool-selection accuracy: {passed}/{len(rows)} = {accuracy:.1%}")

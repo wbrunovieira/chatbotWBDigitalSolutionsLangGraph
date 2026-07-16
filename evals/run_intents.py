@@ -20,11 +20,10 @@ import os
 import sys
 from pathlib import Path
 
-import httpx
-
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # so `python evals/run_intents.py` finds the root modules
 
+import _deepseek  # noqa: E402 — evals/_deepseek.py (resilient DeepSeek call)
 from langfuse_client import LOCAL_PROMPTS, LocalPrompt  # noqa: E402
 from nodes import parse_intent  # noqa: E402
 
@@ -35,22 +34,14 @@ def classify(message: str, language: str, current_page: str = "/") -> str:
         user_input=message, language=language, current_page=current_page
     )
     body = {
-        "model": "deepseek-chat",
+        "model": "deepseek-chat",  # NB: a floating vendor pointer — weights can change server-side
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.1,
+        "temperature": 0,  # deterministic, so a gate red means a real change, not sampling noise
     }
     if "json" in prompt.lower():
         body["response_format"] = {"type": "json_object"}
-    resp = httpx.post(
-        "https://api.deepseek.com/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {os.environ['DEEPSEEK_API_KEY']}",
-            "Content-Type": "application/json",
-        },
-        json=body,
-        timeout=30.0,
-    )
-    content = resp.json()["choices"][0]["message"]["content"]
+    data = _deepseek.chat(body)
+    content = data["choices"][0]["message"]["content"]
     return parse_intent(content)
 
 
@@ -62,12 +53,17 @@ def main() -> int:
 
     rows = [json.loads(line) for line in Path(args.dataset).read_text(encoding="utf-8").splitlines() if line.strip()]
     passed, fails = 0, []
-    for r in rows:
-        got = classify(r["message"], r.get("language", "pt-BR"))
-        if got == r["expected"]:
-            passed += 1
-        else:
-            fails.append((r["message"], r["expected"], got))
+    try:
+        for r in rows:
+            got = classify(r["message"], r.get("language", "pt-BR"))
+            if got == r["expected"]:
+                passed += 1
+            else:
+                fails.append((r["message"], r["expected"], got))
+    except _deepseek.InfraError as e:
+        # Infra problem, NOT a quality regression — exit 2 so a red build is legible & re-runnable.
+        print(f"::error::eval aborted (infra, not a regression): {e}")
+        return 2
 
     accuracy = passed / len(rows) if rows else 0.0
     print(f"intent accuracy: {passed}/{len(rows)} = {accuracy:.1%}")

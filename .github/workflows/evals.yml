@@ -1,0 +1,55 @@
+name: Evals
+
+# LLM quality gate: runs the intent and tool-use evals against the REAL model and FAILS the
+# build if accuracy regresses below its threshold — so a prompt/behavior regression (like
+# "boa tarde" -> off_topic) goes red BEFORE merge instead of reaching production.
+#
+# Scoped to PRs that touch prompt/agent code (paths filter), so docs/infra PRs don't pay for
+# a live eval. The runners are deterministic (temperature 0) and retry transient API errors,
+# reporting a genuine outage as a distinct "infra, not a regression" failure.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "nodes.py"
+      - "tools.py"
+      - "config.py"
+      - "langfuse_client.py"
+      - "langfuse_prompts_v3.py"
+      - "evals/**"
+      - ".github/workflows/evals.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evals:
+    name: LLM evals (intent + tool-use)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Skip on fork PRs: they get no DEEPSEEK_API_KEY secret (by design), so the gate can't run.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Assert DeepSeek key is available
+        run: |
+          if [ -z "$DEEPSEEK_API_KEY" ]; then
+            echo "::error::DEEPSEEK_API_KEY secret is missing — the evals gate cannot run."
+            exit 1
+          fi
+      - name: Intent classification eval (gate >= 90%)
+        run: python evals/run_intents.py --threshold 0.9
+      - name: Tool-use eval (gate >= 75%)
+        run: python evals/run_tools.py --threshold 0.75
