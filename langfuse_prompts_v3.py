@@ -167,44 +167,8 @@ Generate response in {{language}}:""",
         "config": {"model": "deepseek-chat", "temperature": 0.7},
     },
 
-    # ========== RESPOSTA SOBRE PREÇOS ==========
-    "generate_pricing_response": {
-        "type": "text",
-        "prompt": """Generate a response about pricing for WB Digital Solutions.
-
-User question: "{{user_input}}"
-Language: {{language}}
-Current page: {{current_page}}
-
-PRICING REFERENCE (use as guide, not fixed):
-- Landing Page: R$ 3.000+ / $600+ USD
-- Institutional Website: R$ 6.000-15.000 / $1,200-3,000 USD
-- E-commerce: R$ 12.000+ / $2,400+ USD
-- Automation: R$ 5.000+ / $1,000+ USD
-- AI Projects: Custom quote
-- EAD Platform: R$ 15.000+ / $3,000+ USD
-
-TIMELINES:
-- Landing Page: 1-2 weeks
-- Website: 4-6 weeks
-- E-commerce: 8-12 weeks
-- Automation: 2-4 weeks
-- AI/EAD: 6-12 weeks
-
-RULES:
-1. Give price ranges, not exact prices
-2. Explain that final price depends on requirements
-3. Mention what affects price (features, complexity, timeline)
-4. ALWAYS invite them to get a personalized quote
-5. ALWAYS end with WhatsApp contact
-6. Be transparent and helpful
-
-CONTACT (ALWAYS include):
-📲 WhatsApp {{whatsapp}} - orçamento personalizado em até 2h!
-
-Generate response in {{language}}:""",
-        "config": {"model": "deepseek-chat", "temperature": 0.7},
-    },
+    # Pricing is no longer discussed in chat — a price question is routed to lead capture
+    # (create_lead / schedule_meeting) instead of quoting. Prompt intentionally removed.
 
     # ========== COMPARTILHAR CONTATO ==========
     "generate_contact_response": {

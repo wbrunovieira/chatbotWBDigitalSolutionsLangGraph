@@ -44,3 +44,16 @@ data_path=/root/chatbot/volumes
 # rate_limit_per_minute=10
 # rate_limit_per_hour=100
 # max_message_length=1000
+
+# --- Agent tools (see tools.py) ---
+# wbcrm_api_token is NOT set here — it's generated in the CRM and stored as a secret
+# (GitHub secret WBCRM_API_TOKEN and, for local runs, the gitignored inventory.ini).
+# wbcrm_base_url=http://wb-crm-backend:3010   # internal; chatbot is on the wb-crm network
+# lead_source_group=bot
+# booking_url=https://agenda.wbdigitalsolutions.com/book
+# whatsapp_contact=(11) 98286-4581
+# Evolution (WhatsApp notify) — optional; blank skips the notify:
+# evolution_api_url=
+# evolution_api_key=
+# evolution_instance=
+# my_whatsapp_number=
