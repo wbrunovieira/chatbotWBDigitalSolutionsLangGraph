@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 import mcp_server
 import tools
 
@@ -32,13 +34,17 @@ class TestMcpServer:
         assert result["message"] == "called schedule_meeting"
         assert result["data"]["lead_id"] == "L1"
 
-    async def test_failure_is_distinguishable_not_a_cheerful_string(self, monkeypatch):
+    async def test_failure_is_raised_as_a_protocol_error(self, monkeypatch):
+        # A tool failure (dispatch ok:False) must surface as a protocol-level MCP error, not
+        # a dict that reads like success — FastMCP raises ToolError, which becomes isError=True
+        # for the client so the model can retry / fall back.
         async def fake_dispatch(name, args):
-            return {"ok": False, "message": "handoff", "error": "crm down"}
+            return {"ok": False, "message": "handoff WhatsApp", "error": "crm down"}
 
         monkeypatch.setattr(tools, "dispatch", fake_dispatch)
-        result = _result(await mcp_server.mcp.call_tool("create_lead", {"business_name": "X"}))
-        assert result["ok"] is False  # the model can see it failed, not a fake success
+        with pytest.raises(Exception) as exc:
+            await mcp_server.mcp.call_tool("create_lead", {"business_name": "X"})
+        assert "handoff WhatsApp" in str(exc.value)
 
     async def test_binds_mcp_caller_and_forwards_args(self, monkeypatch):
         seen = {}

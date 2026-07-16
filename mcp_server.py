@@ -25,6 +25,15 @@ def _bind_mcp_caller() -> None:
     tools.set_client_ip("mcp")
 
 
+def _raise_on_failure(result: dict) -> dict:
+    # Surface a tool failure as a protocol-level MCP error (FastMCP marks it isError=True)
+    # so the calling model can retry / fall back — not a dict that reads like success. On
+    # success, return the structured {ok, message, data}.
+    if not result.get("ok", True):
+        raise RuntimeError(result.get("message", "tool failed"))
+    return result
+
+
 @mcp.tool()
 async def create_lead(
     business_name: str,
@@ -35,15 +44,15 @@ async def create_lead(
 ) -> dict:
     """Save an interested person or company as a lead in the WB Digital Solutions CRM.
     Provide whatever the person shared; only business_name is required. Returns
-    {ok, message, data}; check `ok` — a false value means the write failed."""
+    {ok, message, data} on success; a tool error means the write failed."""
     _bind_mcp_caller()
-    return await tools.dispatch("create_lead", {
+    return _raise_on_failure(await tools.dispatch("create_lead", {
         "business_name": business_name,
         "contact_name": contact_name,
         "contact_whatsapp": contact_whatsapp,
         "contact_email": contact_email,
         "description": description,
-    })
+    }))
 
 
 @mcp.tool()
@@ -51,17 +60,17 @@ async def schedule_meeting(business_name: Optional[str] = None, description: str
     """Return the direct link to book a meeting with the WB Digital Solutions team
     (and capture the lead). Returns {ok, message, data}."""
     _bind_mcp_caller()
-    return await tools.dispatch("schedule_meeting", {
+    return _raise_on_failure(await tools.dispatch("schedule_meeting", {
         "business_name": business_name,
         "description": description,
-    })
+    }))
 
 
 @mcp.tool()
 async def handoff_to_human(reason: str = "") -> dict:
     """Hand the conversation to a human on WhatsApp. Returns {ok, message, data}."""
     _bind_mcp_caller()
-    return await tools.dispatch("handoff_to_human", {"reason": reason})
+    return _raise_on_failure(await tools.dispatch("handoff_to_human", {"reason": reason}))
 
 
 if __name__ == "__main__":
