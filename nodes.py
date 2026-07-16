@@ -352,7 +352,13 @@ async def _deepseek_chat(messages: list, temperature: float = 0.7, use_tools: bo
             },
             json=body,
         )
-    return resp.json()
+    try:
+        return resp.json()
+    except ValueError:
+        # A 5xx that returns HTML instead of JSON — don't crash; the loop's choices-guard
+        # then produces a graceful fallback.
+        logging.error("DeepSeek returned non-JSON (status %s): %s", resp.status_code, resp.text[:200])
+        return {}
 
 
 async def _run_tool_loop(messages: list, trace, instruction_prompt, max_iters: int = 3):
@@ -401,11 +407,23 @@ async def _run_tool_loop(messages: list, trace, instruction_prompt, max_iters: i
             messages.append({"role": "tool", "tool_call_id": call.get("id", ""), "content": json.dumps(result, ensure_ascii=False)})
 
     # Still asking for tools after max_iters: force a final text answer (tools off).
+    generation = start_llm_generation(
+        trace=trace, name="generate_response", model="deepseek-chat",
+        input_messages=messages, metadata={"temperature": 0.7}, prompt=instruction_prompt,
+    )
     data = await _deepseek_chat(messages, use_tools=False)
+    usage = data.get("usage", {})
+    if usage:
+        DeepSeekOptimizer.update_usage(
+            input_tokens=usage.get("prompt_tokens", 0),
+            output_tokens=usage.get("completion_tokens", 0),
+        )
     try:
-        return data["choices"][0]["message"].get("content") or "", tool_results
+        content = data["choices"][0]["message"].get("content") or ""
     except (KeyError, IndexError, TypeError):
-        return "Fale com a gente no WhatsApp (11) 98286-4581!", tool_results
+        content = "Fale com a gente no WhatsApp (11) 98286-4581!"
+    end_llm_generation(generation=generation, output_content=content, usage=usage)
+    return content, tool_results
 
 
 async def generate_response(state: dict) -> dict:
@@ -436,12 +454,15 @@ async def generate_response(state: dict) -> dict:
 
     try:
         reply, tool_results = await _run_tool_loop(messages, trace, instruction_prompt)
-    except httpx.ReadTimeout:
-        logging.error("Request timed out in DeepSeek API call for response generation")
+    except httpx.HTTPError as e:
+        # ANY transport error (timeout, connect, protocol) degrades gracefully — this is
+        # the "never crash the turn" guarantee, so it must not be ReadTimeout-only.
+        logging.error("DeepSeek call failed in generate_response: %s", e)
         return {
             **state,
-            "response": "Sorry, the service is taking too long to respond. Please try again later.",
-            "step": "error_timeout",
+            "response": "Desculpe, tive um problema técnico agora. Fale com a gente no WhatsApp (11) 98286-4581! 📲",
+            "tool_results": [],
+            "step": "error_generation",
         }
 
     return {
@@ -458,6 +479,11 @@ def needs_revision(state: dict) -> bool:
     Pula revisão para respostas já otimizadas.
     """
     response = state.get("response", "")
+
+    # Tool-driven replies (lead confirmation, booking link) are already curated — a
+    # 500-char rewrite could mangle them or drop the booking URL, so never revise them.
+    if state.get("tool_results"):
+        return False
 
     # Critérios para PULAR revisão:
     # 1. Resposta curta e direta (menos de 1000 caracteres)
@@ -566,6 +592,9 @@ async def save_log_qdrant(state: dict) -> dict:
         "intent": state.get("intent"),
         "language": state.get("language"),
         "current_page": state.get("current_page"),
+        # Audit trail: which tools fired this turn (name + ok), so the chatbot side has a
+        # record a lead/booking was created, not only the CRM.
+        "tools_used": [{"tool": t.get("tool"), "ok": t.get("result", {}).get("ok")} for t in state.get("tool_results", [])],
         "timestamp": int(time.time()),
     }
     logging.info("Saving to Qdrant: %s", data_to_save)

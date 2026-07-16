@@ -22,6 +22,7 @@ from deepseek_optimizer import (
     get_request_cost,
 )
 from security import enforce_chat_limits, record_spend, get_spend_snapshot
+import tools
 from langfuse_client import create_trace, update_trace, flush_langfuse, evaluate_response, score_trace
 
 load_dotenv()
@@ -139,6 +140,7 @@ async def chat(payload: ChatRequest, client_ip: str = Depends(enforce_chat_limit
     # enforce_chat_limits already raised 429/503 if this IP is over its rate limit or
     # the daily budget is spent. Being here means the request is allowed to cost money.
     begin_request_cost()
+    tools.set_client_ip(client_ip)  # so create_lead can enforce a per-IP lead cap
     try:
         return await _handle_chat(payload)
     finally:
@@ -157,13 +159,6 @@ async def _handle_chat(payload: ChatRequest):
 
     # Log dos dados recebidos para debug
     logging.info(f"Request received - User: {user_id}, Language: {language}, Page: {current_page}")
-
-    # CACHE DE PADRÕES DESATIVADO - Agora usamos prompts do Langfuse para todas as respostas
-    # Isso permite versionamento e controle via Langfuse
-    # cached_intent = detect_cached_intent(user_input, language)
-    # if cached_intent:
-    #     logging.info(f"Cache hit for pattern: {cached_intent['cache_key']}")
-    #     return {...}
 
     # VERIFICAÇÃO: Cache Redis para mensagens exatas (mantido para performance)
     cache_data = f"{user_input}_{language}_{current_page}"

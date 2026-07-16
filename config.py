@@ -77,6 +77,10 @@ MY_WHATSAPP_NUMBER = os.getenv("MY_WHATSAPP_NUMBER", "")
 TOOL_TIMEOUT_SECONDS = float(os.getenv("TOOL_TIMEOUT_SECONDS", "8"))
 TOOL_RETRIES = int(os.getenv("TOOL_RETRIES", "1"))
 
+# Anti-spam: cap how many leads one client IP can create per UTC day (create_lead posts
+# to the CRM and pushes a WhatsApp notify, so an uncapped loop would spam both).
+MAX_LEADS_PER_IP_PER_DAY = int(os.getenv("MAX_LEADS_PER_IP_PER_DAY", "5"))
+
 # Langfuse
 LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY")
 LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY")

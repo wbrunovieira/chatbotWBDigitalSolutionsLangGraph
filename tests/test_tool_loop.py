@@ -101,3 +101,39 @@ class TestToolLoop:
         reply, results = await nodes._run_tool_loop([], None, None)
         assert "WhatsApp" in reply
         assert results == []
+
+    async def test_multiple_tool_calls_in_one_turn_all_get_tool_messages(self, monkeypatch):
+        # Every tool_call id MUST get a matching role:tool message or DeepSeek 400s the
+        # next call. The loop only exercised one call/turn before; this guards two.
+        multi = {"choices": [{"message": {"content": None, "tool_calls": [
+            {"id": "a", "function": {"name": "create_lead", "arguments": '{"business_name":"X"}'}},
+            {"id": "b", "function": {"name": "schedule_meeting", "arguments": "{}"}},
+        ]}}], "usage": {}}
+        monkeypatch.setattr(nodes, "_deepseek_chat", sequence_chat([multi, text_response("ok")]))
+
+        async def fake_dispatch(name, args):
+            return {"ok": True, "message": name}
+
+        monkeypatch.setattr(tools, "dispatch", fake_dispatch)
+        messages = []
+        reply, results = await nodes._run_tool_loop(messages, None, None)
+        assert reply == "ok"
+        assert len(results) == 2
+        tool_msgs = [m for m in messages if m.get("role") == "tool"]
+        assert {m["tool_call_id"] for m in tool_msgs} == {"a", "b"}
+
+
+class TestGenerateResponseWiring:
+    async def test_degrades_on_transport_error_instead_of_raising(self, monkeypatch):
+        # The whole-node guarantee: a non-ReadTimeout transport error must NOT 500 —
+        # this fails before the #2 fix (generate_response caught ReadTimeout only).
+        import httpx as _httpx
+
+        async def boom(messages, temperature=0.7, use_tools=False):
+            raise _httpx.ConnectError("connection refused")
+
+        monkeypatch.setattr(nodes, "_deepseek_chat", boom)
+        state = {"user_input": "oi", "augmented_input": "responda", "langfuse_trace": None, "messages": []}
+        result = await nodes.generate_response(state)
+        assert result["step"] == "error_generation"
+        assert "WhatsApp" in result["response"]

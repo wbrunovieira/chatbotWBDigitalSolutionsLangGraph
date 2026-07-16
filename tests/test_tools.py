@@ -46,7 +46,7 @@ class FakeAsyncClient:
 
 
 @pytest.fixture
-def fake_http(monkeypatch):
+def fake_http(monkeypatch, redis_fake):  # redis_fake: create_lead's per-IP quota uses Redis
     FakeAsyncClient.calls = []
     FakeAsyncClient.response = FakeResponse(200, {"id": "lead-123"})
     FakeAsyncClient.raise_exc = None
@@ -117,7 +117,22 @@ class TestResilience:
         res = await tools.dispatch("create_lead", {"business_name": "X"})
         assert res["ok"] is False
 
-    async def test_retries_then_succeeds(self, fake_http, monkeypatch):
+    async def test_writes_do_not_retry(self, fake_http, monkeypatch):
+        # create_lead is a non-idempotent write -> retries=0. A transient failure must NOT
+        # be retried (that would risk a duplicate lead); it degrades gracefully instead.
+        attempts = {"n": 0}
+
+        async def flaky(_args):
+            attempts["n"] += 1
+            raise httpx.ConnectError("transient")
+
+        monkeypatch.setattr(tools._TOOLS["create_lead"], "func", flaky)
+        res = await tools.dispatch("create_lead", {"business_name": "X"})
+        assert res["ok"] is False
+        assert attempts["n"] == 1  # exactly one attempt, no retry
+
+    async def test_retryable_tool_retries_then_succeeds(self, fake_http, monkeypatch):
+        # An idempotent tool (handoff) uses the default retry policy (config.TOOL_RETRIES).
         monkeypatch.setattr(config, "TOOL_RETRIES", 1)
         attempts = {"n": 0}
 
@@ -127,8 +142,8 @@ class TestResilience:
                 raise httpx.ConnectError("transient")
             return {"ok": True, "message": "ok"}
 
-        monkeypatch.setattr(tools._TOOLS["create_lead"], "func", flaky)
-        res = await tools.dispatch("create_lead", {"business_name": "X"})
+        monkeypatch.setattr(tools._TOOLS["handoff_to_human"], "func", flaky)
+        res = await tools.dispatch("handoff_to_human", {})
         assert res["ok"] is True
         assert attempts["n"] == 2
 
@@ -144,6 +159,22 @@ class TestOtherTools:
         res = await tools.dispatch("handoff_to_human", {"reason": "wants a person"})
         assert res["ok"] is True
         assert config.WHATSAPP_CONTACT in res["message"]
+
+
+class TestLeadQuota:
+    async def test_over_daily_cap_skips_crm_and_notify(self, fake_http, monkeypatch):
+        monkeypatch.setattr(config, "MAX_LEADS_PER_IP_PER_DAY", 2)
+        tools.set_client_ip("9.9.9.9")
+
+        for _ in range(2):  # first two create real leads
+            r = await tools.dispatch("create_lead", {"business_name": "X"})
+            assert r["ok"] is True and r["data"].get("skipped") != "quota"
+
+        posts_before = len(fake_http.calls)
+        r = await tools.dispatch("create_lead", {"business_name": "X"})  # third is over the cap
+        assert r["ok"] is True
+        assert r["data"].get("skipped") == "quota"
+        assert len(fake_http.calls) == posts_before  # no new CRM POST
 
 
 class TestToolSpecs:
