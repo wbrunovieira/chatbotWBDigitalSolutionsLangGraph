@@ -186,3 +186,12 @@ class TestToolSpecs:
             fn = spec["function"]
             assert fn["description"]
             assert fn["parameters"]["type"] == "object"
+
+    def test_create_lead_schema_shape_is_stable(self):
+        # Pins the function-calling schema DeepSeek receives (its shape for Optional fields
+        # can shift across pydantic versions — this guards the pydantic bump).
+        params = next(s["function"]["parameters"] for s in tools.TOOL_SPECS if s["function"]["name"] == "create_lead")
+        assert params["required"] == ["business_name"]
+        assert set(params["properties"]) == {
+            "business_name", "contact_name", "contact_whatsapp", "contact_email", "description",
+        }
