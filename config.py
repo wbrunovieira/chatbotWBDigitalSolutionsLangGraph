@@ -51,6 +51,32 @@ MAX_MESSAGE_LENGTH = int(os.getenv("MAX_MESSAGE_LENGTH", "1000"))
 # token because it is used server-to-server, never from the browser.
 ADMIN_API_TOKEN = os.getenv("ADMIN_API_TOKEN")
 
+# --- Agent tools (see tools.py) ---
+
+# WB-CRM (internal): create_lead posts here. In production the chatbot container is
+# attached to the wb-crm network and reaches it by service name; in the demo this points
+# at a stub so `docker compose up` works without the real CRM.
+WBCRM_BASE_URL = os.getenv("WBCRM_BASE_URL", "http://wb-crm-backend:3010")
+WBCRM_API_TOKEN = os.getenv("WBCRM_API_TOKEN", "")
+LEAD_SOURCE_GROUP = os.getenv("LEAD_SOURCE_GROUP", "bot")
+
+# schedule_meeting hands the user this direct booking link.
+BOOKING_URL = os.getenv("BOOKING_URL", "https://agenda.wbdigitalsolutions.com/book")
+
+# handoff_to_human / fallbacks route the user here.
+WHATSAPP_CONTACT = os.getenv("WHATSAPP_CONTACT", "(11) 98286-4581")
+
+# Evolution API (WhatsApp) — create_lead notifies the team here. Best-effort: if any of
+# these is unset the notification is skipped (the lead still persists).
+EVOLUTION_API_URL = os.getenv("EVOLUTION_API_URL", "")
+EVOLUTION_API_KEY = os.getenv("EVOLUTION_API_KEY", "")
+EVOLUTION_INSTANCE = os.getenv("EVOLUTION_INSTANCE", "")
+MY_WHATSAPP_NUMBER = os.getenv("MY_WHATSAPP_NUMBER", "")
+
+# Tool-failure handling (#8d): each tool call is bounded by a timeout and a few retries.
+TOOL_TIMEOUT_SECONDS = float(os.getenv("TOOL_TIMEOUT_SECONDS", "8"))
+TOOL_RETRIES = int(os.getenv("TOOL_RETRIES", "1"))
+
 # Langfuse
 LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY")
 LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY")
