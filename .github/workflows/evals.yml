@@ -1,16 +1,24 @@
 name: Evals
 
-# LLM quality gate: runs the intent and tool-use evals against the REAL model on every PR
-# to main, and FAILS the build if accuracy regresses below its threshold. This is what
-# turns a prompt/behavior regression (like the "boa tarde" -> off_topic bug) red BEFORE
-# merge, instead of discovering it in production.
+# LLM quality gate: runs the intent and tool-use evals against the REAL model and FAILS the
+# build if accuracy regresses below its threshold — so a prompt/behavior regression (like
+# "boa tarde" -> off_topic) goes red BEFORE merge instead of reaching production.
 #
-# Runs on pull_request (not every push) to bound cost — ~45 DeepSeek calls per run, a few
-# cents. Same-repo branches get the DEEPSEEK_API_KEY secret; forks don't (and shouldn't).
+# Scoped to PRs that touch prompt/agent code (paths filter), so docs/infra PRs don't pay for
+# a live eval. The runners are deterministic (temperature 0) and retry transient API errors,
+# reporting a genuine outage as a distinct "infra, not a regression" failure.
 
 on:
   pull_request:
     branches: [main]
+    paths:
+      - "nodes.py"
+      - "tools.py"
+      - "config.py"
+      - "langfuse_client.py"
+      - "langfuse_prompts_v3.py"
+      - "evals/**"
+      - ".github/workflows/evals.yml"
   workflow_dispatch:
 
 concurrency:
@@ -21,10 +29,11 @@ jobs:
   evals:
     name: LLM evals (intent + tool-use)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Skip on fork PRs: they get no DEEPSEEK_API_KEY secret (by design), so the gate can't run.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     env:
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-      QDRANT_HOST: http://localhost:6333
-      ADMIN_API_TOKEN: ci-dummy
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
