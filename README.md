@@ -89,6 +89,36 @@ flowchart TD
 ```
 The response carries the assistant's answer plus cache metadata (`cached`, `cache_type`) when served from Redis. Full request/response shapes live in [`docs/api/endpoints.md`](docs/api/endpoints.md).
 
+## MCP server — the agent's tools, callable by any MCP client
+
+The same tools the in-app agent uses — `create_lead`, `schedule_meeting`,
+`handoff_to_human` — are also exposed as a standards-compliant **MCP** (Model Context
+Protocol) server ([`mcp_server.py`](mcp_server.py)), so any MCP client (Claude Desktop,
+Cursor, the MCP Inspector) can list and call them. **One tool implementation
+(`tools.py`), two consumers** (the LangGraph agent and MCP) — both go through the same
+Pydantic validation, timeout + retry, and per-IP lead cap.
+
+```bash
+pip install mcp
+python mcp_server.py          # stdio transport
+```
+
+Connect from **Claude Desktop** (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "wb-digital-solutions": {
+      "command": "python",
+      "args": ["/absolute/path/to/mcp_server.py"]
+    }
+  }
+}
+```
+
+Then ask *"create a lead for Padaria do Zé"* and Claude calls the CRM through the server.
+Inspect it with `npx @modelcontextprotocol/inspector python mcp_server.py`.
+
 ## Running locally
 
 ```bash
