@@ -3,6 +3,15 @@ version: '3.8'
 networks:
   {{ docker_network }}:
     external: true
+  # External networks of the sibling stacks, so the chatbot can reach the WB-CRM and the
+  # Evolution (WhatsApp) API by service name, internally — no Cloudflare hop. These already
+  # exist on the host (created by the wb-crm / evolution compose stacks).
+  wb_crm_net:
+    external: true
+    name: wb-crm_default
+  evolution_net:
+    external: true
+    name: evolution_evolution_network
 
 volumes:
   qdrant_data:
@@ -98,11 +107,24 @@ services:
       - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE}
       - RATE_LIMIT_PER_HOUR=${RATE_LIMIT_PER_HOUR}
       - MAX_MESSAGE_LENGTH=${MAX_MESSAGE_LENGTH}
+      # Agent tools (see tools.py). Token comes from a secret; Evolution vars are optional
+      # (blank -> the WhatsApp notify is skipped, the lead still persists).
+      - WBCRM_BASE_URL=${WBCRM_BASE_URL}
+      - WBCRM_API_TOKEN=${WBCRM_API_TOKEN}
+      - LEAD_SOURCE_GROUP=${LEAD_SOURCE_GROUP}
+      - BOOKING_URL=${BOOKING_URL}
+      - WHATSAPP_CONTACT=${WHATSAPP_CONTACT}
+      - EVOLUTION_API_URL=${EVOLUTION_API_URL}
+      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
+      - EVOLUTION_INSTANCE=${EVOLUTION_INSTANCE}
+      - MY_WHATSAPP_NUMBER=${MY_WHATSAPP_NUMBER}
     depends_on:
       - qdrant
       - redis-chatbot
     networks:
       - {{ docker_network }}
+      - wb_crm_net
+      - evolution_net
     volumes:
       - {{ install_path }}/logs:/app/logs
     healthcheck:

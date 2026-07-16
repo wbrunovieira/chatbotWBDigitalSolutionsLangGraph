@@ -1,0 +1,11 @@
+{"message": "Meu nome é João, sou da Padaria Central e quero um site novo", "expected_tool": "create_lead", "note": "gave name + company -> capture"}
+{"message": "Sou a Ana Ribeiro, meu whatsapp é +5511988887777, me chamem", "expected_tool": "create_lead", "note": "gave name + contact"}
+{"message": "Aqui é o Carlos da Auto Peças Silva, quero automatizar meu atendimento", "expected_tool": "create_lead"}
+{"message": "quero agendar uma reunião com vocês", "expected_tool": "schedule_meeting"}
+{"message": "podemos marcar uma call essa semana?", "expected_tool": "schedule_meeting"}
+{"message": "como faço pra falar direto com alguém pra fechar?", "expected_tool": "schedule_meeting|handoff_to_human"}
+{"message": "quero falar com uma pessoa de verdade, não com um bot", "expected_tool": "handoff_to_human"}
+{"message": "me passa um atendente humano", "expected_tool": "handoff_to_human"}
+{"message": "quanto custa um e-commerce?", "expected_tool": "schedule_meeting|create_lead", "note": "price question -> capture/schedule, never quote"}
+{"message": "bom dia", "expected_tool": null, "note": "greeting -> no tool"}
+{"message": "vocês trabalham com inteligência artificial?", "expected_tool": null, "note": "pure info question -> answer, no tool yet"}

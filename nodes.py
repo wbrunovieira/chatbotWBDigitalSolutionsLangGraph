@@ -12,6 +12,7 @@ from fastembed import TextEmbedding
 from langdetect import detect
 from deepseek_optimizer import DeepSeekOptimizer, estimate_tokens, should_skip_api_call
 from langfuse_client import start_llm_generation, end_llm_generation, get_prompt, evaluate_response, score_trace
+import tools
 
 
 # FastEmbed - lightweight ONNX-based embeddings (no PyTorch required).
@@ -289,11 +290,10 @@ async def augment_query(state: dict) -> dict:
     }
     page_specific_context = page_contexts.get(current_page, "User on home page.")
 
-    # Buscar prompt do Langfuse baseado no intent
-    if intent == "request_quote":
-        system_prompt = get_prompt("generate_pricing_response")
-    else:
-        system_prompt = get_prompt("generate_services_response")
+    # Prices are no longer quoted in chat: a price question is a hot lead, so we route
+    # it through the same services prompt and let the tool loop capture the lead / offer
+    # scheduling instead of giving a number.
+    system_prompt = get_prompt("generate_services_response")
 
     if system_prompt:
         try:
@@ -325,6 +325,89 @@ IMPORTANT: Always include WhatsApp (11) 98286-4581 at the end of your response."
 
     return {**state, "augmented_input": augmented, "step": "augment_query"}
 
+TOOL_SYSTEM_PROMPT = (
+    "You are the WB Digital Solutions assistant. You have tools — use them when they fit:\n"
+    "- create_lead: when the user shares who they are (name/company) or a contact, or clearly "
+    "wants a proposal — capture them as a lead.\n"
+    "- schedule_meeting: when the user wants to talk, meet, or get a proposal — give them the booking link.\n"
+    "- handoff_to_human: when the user explicitly asks to talk to a person.\n"
+    "Only pass details the user actually gave; never invent a name, phone or email. Do NOT discuss "
+    "prices — if asked about price, capture the lead or offer to schedule instead of giving a number."
+)
+
+
+async def _deepseek_chat(messages: list, temperature: float = 0.7, use_tools: bool = False) -> dict:
+    """Single DeepSeek chat call. Returns the parsed JSON. Offers the tools when asked."""
+    body = {"model": "deepseek-chat", "messages": messages, "temperature": temperature}
+    if use_tools:
+        body["tools"] = tools.TOOL_SPECS
+        body["tool_choice"] = "auto"
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            "https://api.deepseek.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                "Content-Type": "application/json",
+                **DeepSeekOptimizer.get_optimization_headers(),
+            },
+            json=body,
+        )
+    return resp.json()
+
+
+async def _run_tool_loop(messages: list, trace, instruction_prompt, max_iters: int = 3):
+    """
+    Generate a reply, letting the model DECIDE to call tools. Any tool call is executed via
+    tools.dispatch (validated + resilient), the result is fed back, and we loop until the
+    model returns text (bounded by max_iters). Returns (reply_text, tool_results).
+    """
+    tool_results = []
+    for _ in range(max_iters):
+        generation = start_llm_generation(
+            trace=trace, name="generate_response", model="deepseek-chat",
+            input_messages=messages, metadata={"temperature": 0.7}, prompt=instruction_prompt,
+        )
+        data = await _deepseek_chat(messages, use_tools=True)
+        usage = data.get("usage", {})
+        if usage:
+            DeepSeekOptimizer.update_usage(
+                input_tokens=usage.get("prompt_tokens", 0),
+                output_tokens=usage.get("completion_tokens", 0),
+            )
+        try:
+            msg = data["choices"][0]["message"]
+        except (KeyError, IndexError, TypeError):
+            logging.error("generate_response: unexpected DeepSeek response: %s", str(data)[:200])
+            end_llm_generation(generation=generation, output_content="", usage=usage)
+            return "Desculpe, tive um problema técnico. Fale com a gente no WhatsApp (11) 98286-4581.", tool_results
+
+        end_llm_generation(generation=generation, output_content=msg.get("content") or "", usage=usage)
+
+        tool_calls = msg.get("tool_calls")
+        if not tool_calls:
+            return msg.get("content") or "", tool_results
+
+        # Record the assistant's tool-call turn, then execute each call and feed results back.
+        messages.append({"role": "assistant", "content": msg.get("content"), "tool_calls": tool_calls})
+        for call in tool_calls:
+            fn = call.get("function", {})
+            name = fn.get("name", "")
+            try:
+                args = json.loads(fn.get("arguments") or "{}")
+            except (ValueError, TypeError):
+                args = {}
+            result = await tools.dispatch(name, args)
+            tool_results.append({"tool": name, "result": result})
+            messages.append({"role": "tool", "tool_call_id": call.get("id", ""), "content": json.dumps(result, ensure_ascii=False)})
+
+    # Still asking for tools after max_iters: force a final text answer (tools off).
+    data = await _deepseek_chat(messages, use_tools=False)
+    try:
+        return data["choices"][0]["message"].get("content") or "", tool_results
+    except (KeyError, IndexError, TypeError):
+        return "Fale com a gente no WhatsApp (11) 98286-4581!", tool_results
+
+
 async def generate_response(state: dict) -> dict:
     user_input = state["user_input"]
     augmented_input = state.get("augmented_input")
@@ -344,67 +427,27 @@ async def generate_response(state: dict) -> dict:
 
     query = f"{instruction}{augmented_input}" if augmented_input else f"{instruction}{user_input}"
 
-    messages = state.get("messages", []) + [{"role": "user", "content": query}]
+    # System turn makes the model tool-aware; the augmented content stays the user turn.
+    messages = (
+        [{"role": "system", "content": TOOL_SYSTEM_PROMPT}]
+        + state.get("messages", [])
+        + [{"role": "user", "content": query}]
+    )
 
     try:
-        # Adicionar headers de otimização
-        optimization_headers = DeepSeekOptimizer.get_optimization_headers()
-
-        # Start generation BEFORE LLM call
-        generation = start_llm_generation(
-            trace=trace,
-            name="generate_response",
-            model="deepseek-chat",
-            input_messages=messages,
-            metadata={"temperature": 0.7},
-            prompt=instruction_prompt if instruction_prompt else None,
-        )
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                    "Content-Type": "application/json",
-                    **optimization_headers
-                },
-                json={
-                    "model": "deepseek-chat",
-                    "messages": messages,
-                    "temperature": 0.7
-                }
-            )
+        reply, tool_results = await _run_tool_loop(messages, trace, instruction_prompt)
     except httpx.ReadTimeout:
         logging.error("Request timed out in DeepSeek API call for response generation")
         return {
             **state,
             "response": "Sorry, the service is taking too long to respond. Please try again later.",
-            "step": "error_timeout"
+            "step": "error_timeout",
         }
-
-    data = response.json()
-
-    # Rastrear uso de tokens
-    usage = data.get("usage", {})
-    if usage:
-        DeepSeekOptimizer.update_usage(
-            input_tokens=usage.get("prompt_tokens", 0),
-            output_tokens=usage.get("completion_tokens", 0),
-            cache_hit=response.headers.get("X-Cache-Status") == "hit"
-        )
-
-    reply = data["choices"][0]["message"]["content"]
-
-    # End generation AFTER LLM call
-    end_llm_generation(
-        generation=generation,
-        output_content=reply,
-        usage=usage,
-    )
 
     return {
         **state,
         "response": reply,
+        "tool_results": tool_results,
         "messages": messages + [{"role": "assistant", "content": reply}],
         "step": "generate_response",
         "instruction_prompt": instruction_prompt,
