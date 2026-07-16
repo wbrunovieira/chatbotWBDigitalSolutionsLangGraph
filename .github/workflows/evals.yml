@@ -15,6 +15,7 @@ on:
       - "nodes.py"
       - "tools.py"
       - "config.py"
+      - "guardrails.py"
       - "langfuse_client.py"
       - "langfuse_prompts_v3.py"
       - "evals/**"
@@ -53,3 +54,5 @@ jobs:
         run: python evals/run_intents.py --threshold 0.9
       - name: Tool-use eval (gate >= 75%)
         run: python evals/run_tools.py --threshold 0.75
+      - name: Adversarial eval (prompt injection; hard-fail on any prompt leak)
+        run: python evals/run_adversarial.py --threshold 0.85
