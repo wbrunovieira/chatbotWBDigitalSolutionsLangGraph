@@ -52,6 +52,10 @@ async def _lead_quota_ok() -> bool:
     for create_lead. Fails OPEN — a Redis hiccup must never block a genuine lead.
     """
     ip = _client_ip.get()
+    # MCP clients are local & trusted (stdio), not a public spam surface — don't cap them
+    # (otherwise the 6th lead/day would be silently dropped as a fake "success").
+    if ip == "mcp":
+        return True
     day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     key = f"leads:ip:{ip}:{day}"
     try:

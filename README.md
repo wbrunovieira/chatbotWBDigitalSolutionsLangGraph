@@ -99,9 +99,13 @@ Cursor, the MCP Inspector) can list and call them. **One tool implementation
 Pydantic validation, timeout + retry, and per-IP lead cap.
 
 ```bash
-pip install mcp
-python mcp_server.py          # stdio transport
+pip install -r requirements-dev.txt   # pins mcp==1.28.1
+python mcp_server.py                   # stdio transport (local, trusted)
 ```
+
+> `create_lead` writes to the CRM with no auth, so the trust boundary is the local
+> process. The server runs over **stdio only** — don't switch to an SSE/HTTP transport
+> without adding authentication first.
 
 Connect from **Claude Desktop** (`claude_desktop_config.json`):
 

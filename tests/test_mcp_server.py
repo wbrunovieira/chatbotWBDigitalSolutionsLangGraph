@@ -1,7 +1,15 @@
 """MCP server smoke test: an MCP client can list the tools and call one."""
 
+import json
+
 import mcp_server
 import tools
+
+
+def _result(ret) -> dict:
+    """Extract the tool's JSON result from a FastMCP call_tool return (content list)."""
+    content = ret[0] if isinstance(ret, tuple) else ret
+    return json.loads(content[0].text)
 
 
 class TestMcpServer:
@@ -13,24 +21,34 @@ class TestMcpServer:
         assert "business_name" in props
         assert "description" in props
 
-    async def test_call_returns_a_valid_result(self, monkeypatch):
+    async def test_call_returns_structured_result(self, monkeypatch):
         async def fake_dispatch(name, args):
-            return {"ok": True, "message": f"called {name}", "data": {}}
+            return {"ok": True, "message": f"called {name}", "data": {"lead_id": "L1"}}
 
         monkeypatch.setattr(tools, "dispatch", fake_dispatch)
-        content, structured = await mcp_server.mcp.call_tool("schedule_meeting", {"description": "quer conversar"})
-        assert structured["result"].startswith("called schedule_meeting")
-        assert content[0].text.startswith("called schedule_meeting")
+        result = _result(await mcp_server.mcp.call_tool("schedule_meeting", {"description": "x"}))
+        # The result exposes ok + message + data, so the calling model can act on it.
+        assert result["ok"] is True
+        assert result["message"] == "called schedule_meeting"
+        assert result["data"]["lead_id"] == "L1"
 
-    async def test_call_forwards_args_through_the_shared_dispatch(self, monkeypatch):
+    async def test_failure_is_distinguishable_not_a_cheerful_string(self, monkeypatch):
+        async def fake_dispatch(name, args):
+            return {"ok": False, "message": "handoff", "error": "crm down"}
+
+        monkeypatch.setattr(tools, "dispatch", fake_dispatch)
+        result = _result(await mcp_server.mcp.call_tool("create_lead", {"business_name": "X"}))
+        assert result["ok"] is False  # the model can see it failed, not a fake success
+
+    async def test_binds_mcp_caller_and_forwards_args(self, monkeypatch):
         seen = {}
 
         async def fake_dispatch(name, args):
-            seen["name"], seen["args"] = name, args
+            seen["name"], seen["args"], seen["ip"] = name, args, tools._client_ip.get()
             return {"ok": True, "message": "ok"}
 
         monkeypatch.setattr(tools, "dispatch", fake_dispatch)
-        await mcp_server.mcp.call_tool("create_lead", {"business_name": "Padaria do Zé", "description": "quer um site"})
+        await mcp_server.mcp.call_tool("create_lead", {"business_name": "Padaria do Zé"})
         assert seen["name"] == "create_lead"
         assert seen["args"]["business_name"] == "Padaria do Zé"
-        assert seen["args"]["description"] == "quer um site"
+        assert seen["ip"] == "mcp"  # tagged MCP -> bypasses the public per-IP lead cap

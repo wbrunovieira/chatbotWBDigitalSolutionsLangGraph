@@ -19,6 +19,12 @@ import tools
 mcp = FastMCP("wb-digital-solutions")
 
 
+def _bind_mcp_caller() -> None:
+    # Tag calls as coming from the (local, trusted) MCP client so the per-IP lead cap —
+    # a defense against PUBLIC chat spam — doesn't silently drop a legit MCP lead.
+    tools.set_client_ip("mcp")
+
+
 @mcp.tool()
 async def create_lead(
     business_name: str,
@@ -26,36 +32,40 @@ async def create_lead(
     contact_whatsapp: Optional[str] = None,
     contact_email: Optional[str] = None,
     description: str = "",
-) -> str:
+) -> dict:
     """Save an interested person or company as a lead in the WB Digital Solutions CRM.
-    Provide whatever the person shared; only business_name is required."""
-    result = await tools.dispatch("create_lead", {
+    Provide whatever the person shared; only business_name is required. Returns
+    {ok, message, data}; check `ok` — a false value means the write failed."""
+    _bind_mcp_caller()
+    return await tools.dispatch("create_lead", {
         "business_name": business_name,
         "contact_name": contact_name,
         "contact_whatsapp": contact_whatsapp,
         "contact_email": contact_email,
         "description": description,
     })
-    return result["message"]
 
 
 @mcp.tool()
-async def schedule_meeting(business_name: Optional[str] = None, description: str = "") -> str:
+async def schedule_meeting(business_name: Optional[str] = None, description: str = "") -> dict:
     """Return the direct link to book a meeting with the WB Digital Solutions team
-    (and capture the lead)."""
-    result = await tools.dispatch("schedule_meeting", {
+    (and capture the lead). Returns {ok, message, data}."""
+    _bind_mcp_caller()
+    return await tools.dispatch("schedule_meeting", {
         "business_name": business_name,
         "description": description,
     })
-    return result["message"]
 
 
 @mcp.tool()
-async def handoff_to_human(reason: str = "") -> str:
-    """Hand the conversation to a human on WhatsApp."""
-    result = await tools.dispatch("handoff_to_human", {"reason": reason})
-    return result["message"]
+async def handoff_to_human(reason: str = "") -> dict:
+    """Hand the conversation to a human on WhatsApp. Returns {ok, message, data}."""
+    _bind_mcp_caller()
+    return await tools.dispatch("handoff_to_human", {"reason": reason})
 
 
 if __name__ == "__main__":
+    # stdio transport ONLY. create_lead writes to the CRM with no auth, so the trust
+    # boundary is the local process. Do NOT switch to an SSE/HTTP transport without
+    # adding authentication first — that would expose an unauthenticated CRM-write tool.
     mcp.run()
