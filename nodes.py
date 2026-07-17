@@ -338,14 +338,14 @@ async def augment_query(state: dict) -> dict:
             # Fallback simples
             augmented = f"""You are WB Digital Solutions assistant. {language_instruction}
 Answer: {user_input}
-End with a helpful next step; do NOT paste a phone number unless the user asks to talk to someone."""
+End with a helpful next step. Do NOT paste a phone number; if the user asks for contact or to talk to someone, offer to connect them with our team or share the booking link."""
     else:
         # Fallback se não encontrar prompt no Langfuse
         augmented = f"""You are WB Digital Solutions assistant specializing in websites, automation, and AI.
 {language_instruction}
 Context: {company_context}
 User question: {user_input}
-End with a helpful next step. Do NOT include a phone number or WhatsApp unless the user asks to talk to a person."""
+End with a helpful next step. Do NOT include a phone number or WhatsApp; if the user asks for contact or to talk to a person, offer to connect them with our team or share the booking link."""
 
     return {**state, "augmented_input": augmented, "step": "augment_query"}
 
