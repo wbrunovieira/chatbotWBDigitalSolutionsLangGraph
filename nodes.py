@@ -332,22 +332,20 @@ async def augment_query(state: dict) -> dict:
                 company_context=company_context or "WB Digital Solutions - websites, automation, AI",
                 user_context=user_context,
                 intent=intent,
-                whatsapp="(11) 98286-4581",
-                email="bruno@wbdigitalsolutions.com",
             )
         except Exception as e:
             logging.warning(f"Error compiling system prompt: {e}")
             # Fallback simples
             augmented = f"""You are WB Digital Solutions assistant. {language_instruction}
 Answer: {user_input}
-Include WhatsApp (11) 98286-4581 at the end."""
+End with a helpful next step; do NOT paste a phone number unless the user asks to talk to someone."""
     else:
         # Fallback se não encontrar prompt no Langfuse
         augmented = f"""You are WB Digital Solutions assistant specializing in websites, automation, and AI.
 {language_instruction}
 Context: {company_context}
 User question: {user_input}
-IMPORTANT: Always include WhatsApp (11) 98286-4581 at the end of your response."""
+End with a helpful next step. Do NOT include a phone number or WhatsApp unless the user asks to talk to a person."""
 
     return {**state, "augmented_input": augmented, "step": "augment_query"}
 
