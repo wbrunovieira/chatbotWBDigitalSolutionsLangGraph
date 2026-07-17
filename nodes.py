@@ -332,22 +332,20 @@ async def augment_query(state: dict) -> dict:
                 company_context=company_context or "WB Digital Solutions - websites, automation, AI",
                 user_context=user_context,
                 intent=intent,
-                whatsapp="(11) 98286-4581",
-                email="bruno@wbdigitalsolutions.com",
             )
         except Exception as e:
             logging.warning(f"Error compiling system prompt: {e}")
             # Fallback simples
             augmented = f"""You are WB Digital Solutions assistant. {language_instruction}
 Answer: {user_input}
-Include WhatsApp (11) 98286-4581 at the end."""
+End with a helpful next step. Do NOT paste a phone number; if the user asks for contact or to talk to someone, offer to connect them with our team or share the booking link."""
     else:
         # Fallback se não encontrar prompt no Langfuse
         augmented = f"""You are WB Digital Solutions assistant specializing in websites, automation, and AI.
 {language_instruction}
 Context: {company_context}
 User question: {user_input}
-IMPORTANT: Always include WhatsApp (11) 98286-4581 at the end of your response."""
+End with a helpful next step. Do NOT include a phone number or WhatsApp; if the user asks for contact or to talk to a person, offer to connect them with our team or share the booking link."""
 
     return {**state, "augmented_input": augmented, "step": "augment_query"}
 
@@ -356,7 +354,8 @@ TOOL_SYSTEM_PROMPT = (
     "- create_lead: when the user shares who they are (name/company) or a contact, or clearly "
     "wants a proposal — capture them as a lead.\n"
     "- schedule_meeting: when the user wants to talk, meet, or get a proposal — give them the booking link.\n"
-    "- handoff_to_human: when the user explicitly asks to talk to a person.\n"
+    "- handoff_to_human: when the user explicitly asks to talk to a person, OR asks for our "
+    "contact / WhatsApp / phone / email — this is how they get our contact details.\n"
     "Only pass details the user actually gave; never invent a name, phone or email. Do NOT discuss "
     "prices — if asked about price, capture the lead or offer to schedule instead of giving a number."
 )
@@ -466,7 +465,7 @@ async def generate_response(state: dict) -> dict:
             "Before answering, always make sure to:\n"
             "- Preserve the user's original language\n"
             "- Keep responses concise (max 3-4 paragraphs)\n"
-            "- If including contact, use ONE line: 'WhatsApp (11) 98286-4581 - respondemos em 2h!'\n\n"
+            "- Only include contact info if the user asked for it or wants a human\n\n"
         )
 
     query = f"{instruction}{augmented_input}" if augmented_input else f"{instruction}{user_input}"

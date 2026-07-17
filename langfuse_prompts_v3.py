@@ -149,9 +149,12 @@ RULES:
 1. Answer the specific question asked
 2. Be informative but concise (max 3 paragraphs)
 3. Highlight relevant services based on the question
-4. ALWAYS end with WhatsApp contact
+4. End with a helpful next step that keeps the conversation going — invite the user to tell
+   you more about their project or offer to help them move forward. Do NOT paste a phone
+   number or WhatsApp; contact is offered separately, only when the user asks to talk to a
+   person or is clearly ready to proceed.
 5. Use bullet points for lists
-6. Use appropriate emoji
+6. Use appropriate emoji (1-2 max)
 
 SERVICES TO MENTION (if relevant):
 - 🌐 Websites: institutional, landing pages, PWA
@@ -159,9 +162,6 @@ SERVICES TO MENTION (if relevant):
 - ⚙️ Automation: process automation, integrations, chatbots
 - 🤖 AI Solutions: data analysis, ML, virtual assistants
 - 🎓 EAD Platforms: LMS, online courses, virtual classrooms
-
-CONTACT (ALWAYS include at end):
-📲 WhatsApp {{whatsapp}} - respondemos em até 2h!
 
 Generate response in {{language}}:""",
         "config": {"model": "deepseek-chat", "temperature": 0.7},
@@ -205,13 +205,12 @@ Generate response in {{language}}:""",
 LANGUAGE: {{language_instruction}}
 
 CRITICAL RULES:
-1. ALWAYS include WhatsApp contact for service/pricing questions
+1. Answer service questions helpfully and guide the user toward a next step. Do NOT paste
+   WhatsApp/phone unless the user asks to talk to a person or is clearly ready to move
+   forward — the assistant offers a booking link or a human handoff when that moment comes.
 2. For off-topic questions, politely redirect (no contact)
 3. Be concise (max 3 paragraphs)
 4. Use appropriate emoji (1-2 per response)
-
-CONTACT FORMAT:
-📲 WhatsApp {{whatsapp}} - respondemos em até 2h!
 
 CONTEXT:
 - Page: {{current_page}}
@@ -231,7 +230,7 @@ COMPANY INFO:
         "prompt": """CHECKLIST before responding:
 ✅ Language: Same as user ({{language}})
 ✅ Length: Max 3 paragraphs, ~400 characters
-✅ Contact: Include WhatsApp for services/pricing
+✅ Contact: only if the user asked to talk to someone or is ready to proceed — otherwise keep engaging
 ✅ Tone: Professional, friendly, helpful
 ✅ Call-to-action: Clear next step""",
         "config": {},
@@ -250,13 +249,11 @@ STRICT RULES:
 1. MAX 500 characters
 2. MAX 3 paragraphs
 3. Keep original language ({{language}})
-4. If about services/pricing and MISSING contact → ADD it
-5. If contact exists → keep it (consolidate if fragmented)
+4. Do NOT add a phone number or WhatsApp that isn't already in the original — contact is
+   surfaced elsewhere (a booking link / human handoff), only when the user asks or is ready
+5. If contact is already present, keep it (consolidate if fragmented)
 6. Remove redundancy
 7. Keep friendly, professional tone
-
-CONTACT FORMAT (if needed):
-📲 WhatsApp (11) 98286-4581 - respondemos em até 2h!
 
 Return ONLY the revised text:""",
         "config": {"model": "deepseek-chat", "temperature": 0.5},
@@ -273,13 +270,13 @@ Intent: {{intent}}
 
 CRITERIA:
 1. relevance: Addresses user's question? (1=yes, 0=no)
-2. mentions_contact: Has WhatsApp for services/pricing? (1=yes or not needed, 0=missing when needed)
+2. contact_when_asked: 1 if the user asked how to contact us and the response provides it, OR the user did not ask (contact not needed); 0 only if the user asked for contact and it's missing
 3. tone: Professional and friendly? (1=yes, 0=no)
 4. language_correct: Correct language? (1=yes, 0=no)
 5. concise: Not too long? (1=yes, 0=no)
 
 JSON only:
-{"relevance": 0|1, "mentions_contact": 0|1, "tone": 0|1, "language_correct": 0|1, "concise": 0|1}""",
+{"relevance": 0|1, "contact_when_asked": 0|1, "tone": 0|1, "language_correct": 0|1, "concise": 0|1}""",
         "config": {"model": "deepseek-chat", "temperature": 0.1},
     },
 }
