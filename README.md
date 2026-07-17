@@ -84,7 +84,7 @@ flowchart TD
 | Node | Responsibility |
 |------|----------------|
 | `intent_detection` | Classifies the message (greeting / off-topic / direct question / agent handoff / schedule) via DeepSeek; sets `fast_track`. |
-| `retrieve_company_context` | RAG: embeds the query and searches the Qdrant `company_info` collection for relevant company knowledge. |
+| `retrieve_company_context` | RAG: embeds the query and does **top-k retrieval** over the chunked `company_info` collection, keeps hits above a score threshold, and attaches the source chunks to the Langfuse trace as citations. |
 | `retrieve_user_context` | Pulls prior conversation turns from the Qdrant `chat_logs` collection (long-term memory). |
 | `augment_query` | Fuses the user query with retrieved company + user context into a grounded prompt. |
 | `response_generation` | Generates the answer with DeepSeek using the Langfuse-versioned prompt. |
@@ -98,7 +98,7 @@ flowchart TD
 - **Abuse & cost controls:** per-IP rate limiting + a daily spend circuit-breaker (both Redis-backed), request-size caps, and an admin-token-gated `/usage-report`. See [Security](#security--abuse-controls).
 - **LLM:** DeepSeek (`deepseek-chat`) over the OpenAI-compatible REST API.
 - **Embeddings:** FastEmbed (ONNX `all-MiniLM-L6-v2`) — **no PyTorch**, keeping the image lightweight.
-- **Vector DB / RAG + memory:** Qdrant (`company_info` knowledge base + `chat_logs` conversation history).
+- **Vector DB / RAG + memory:** Qdrant — the `company_info` knowledge base is chunked (heading-aware) and ingested idempotently at startup ([`ingest.py`](ingest.py)) for top-k retrieval, plus `chat_logs` conversation history.
 - **Caching:** Redis exact-match cache (7-day TTL, keyed by `sha256(message + language + page)`) to skip the graph entirely on repeats.
 - **Observability:** Langfuse — full request traces, response scoring/evaluation, and **versioned prompts** (`v1` → `v3`) so prompt changes are tracked in production.
 - **Cost control:** a custom `DeepSeekOptimizer` that estimates tokens, applies optimization headers, tracks usage, and skips API calls when a call isn't worth making.
