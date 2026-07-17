@@ -751,18 +751,26 @@ async def generate_greeting_response(state: dict) -> dict:
     # Buscar prompt do Langfuse
     greeting_prompt = get_prompt("generate_greeting")
 
+    # The greeting must NOT push contact channels on turn 0 (premature CTA / deflection);
+    # it engages and ends on a qualifying question. WhatsApp is surfaced later via handoff.
+    fallback_prompt = (
+        f"Generate a warm, short opening greeting in {language} for the WB Digital Solutions "
+        "sales chatbot. Briefly say WB helps with websites, automation, and AI, then end with "
+        "ONE qualifying question inviting the visitor to say what they need (a new website, "
+        "automating a process, or using AI). Do NOT include any phone number or WhatsApp. "
+        "Use at most one emoji."
+    )
     if greeting_prompt:
         try:
             prompt = greeting_prompt.compile(
                 language=language,
                 current_page=current_page,
-                whatsapp="(11) 98286-4581",
             )
         except Exception as e:
             logging.warning(f"Error compiling greeting prompt: {e}")
-            prompt = f"Generate a friendly greeting in {language}. Include WhatsApp (11) 98286-4581."
+            prompt = fallback_prompt
     else:
-        prompt = f"Generate a friendly greeting in {language}. Include WhatsApp (11) 98286-4581."
+        prompt = fallback_prompt
 
     try:
         # Start generation BEFORE LLM call
@@ -800,7 +808,9 @@ async def generate_greeting_response(state: dict) -> dict:
     except Exception as e:
         logging.error(f"Error generating greeting: {e}")
         # Fallback minimo
-        response = "Olá! 👋 Sou o assistente da WB Digital Solutions. Como posso ajudar? 📲 WhatsApp (11) 98286-4581"
+        response = ("Olá! 👋 Somos a WB Digital Solutions e ajudamos empresas a crescer com sites, "
+                    "automação e inteligência artificial. Você está pensando em um site novo, em "
+                    "automatizar um processo ou em usar IA no seu negócio?")
 
     return {
         **state,
