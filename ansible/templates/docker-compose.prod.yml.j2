@@ -128,7 +128,10 @@ services:
     volumes:
       - {{ install_path }}/logs:/app/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      # Use Python (present in the image) not curl — the slim base has no curl, which
+      # made this check always fail and marked the container perpetually unhealthy.
+      # Require an exact 200: urlopen accepts any 2xx, so assert the status explicitly.
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=5).status == 200 else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3

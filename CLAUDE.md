@@ -2,6 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ Sempre rastreie o trabalho como issues (skill `track-work`)
+Toda melhoria, correção, feature ou débito técnico DEVE virar issue no projeto
+"chatbot-wb" (cmroypyl6001jpd01qyi04zlj) do WB Project Manager, com status em dia.
+Invoque a skill `track-work` — ela é **local do operador e não versionada**
+(`.claude/` está no `.gitignore`), então num clone novo pode não existir; o board +
+a doc da API são a fonte da verdade: https://projects.wbdigitalsolutions.com/api/docs
+
 ## Project Overview
 
 FastAPI chatbot for WB Digital Solutions. Uses a LangGraph state machine to orchestrate intent detection, RAG context retrieval (Qdrant), LLM response generation (DeepSeek API), and multi-tier caching (pattern match + Redis). Supports Portuguese, English, Spanish, and Italian.
