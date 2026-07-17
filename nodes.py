@@ -456,7 +456,8 @@ async def generate_response(state: dict) -> dict:
 
     try:
         reply, tool_results = await _run_tool_loop(messages, trace, instruction_prompt)
-        reply = guardrails.scrub_output(reply)  # output guardrail: block a prompt/canary leak
+        # output guardrail: block a prompt/canary leak, refusing in the user's language
+        reply = guardrails.scrub_output(reply, state.get("language", "pt-BR"))
     except httpx.HTTPError as e:
         # ANY transport error (timeout, connect, protocol) degrades gracefully — this is
         # the "never crash the turn" guarantee, so it must not be ReadTimeout-only.

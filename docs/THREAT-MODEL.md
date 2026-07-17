@@ -29,9 +29,18 @@ The core rule: **untrusted text is DATA, never instructions.**
   system-prompt-extraction cases; the eval fails the build if the model leaks the canary or
   complies. Wired into the CI eval gate.
 
+**Scope of the hardening:** applied to the **main generation** (`nodes.generate_response`),
+which is where arbitrary user questions and tool use happen. The `generate_greeting_response`
+and `generate_off_topic_response` nodes call the LLM with their own short prompts and are
+**not** hardened and do **not** carry the canary — deliberately: there is no secret system
+prompt or tool access to abuse on those paths, and the fallbacks are hardcoded. An injection
+that lands there can at most produce an off-brand reply, not a data leak. Hardening them (or
+routing all output through one chokepoint) is tracked as follow-up.
+
 ### T2 — System-prompt / internal-data extraction
-Covered by T1's canary + scrub. The canary is the leak signal; the eval asserts it never
-surfaces, and `scrub_output` redacts it as a last resort.
+Covered by T1's canary + scrub. The eval asserts the **literal** canary never surfaces across
+its attack cases at temperature 0 — a concrete regression guard, not a general guarantee (a
+paraphrased leak without the canary would evade it; see Known gaps).
 
 ### T3 — Off-scope / resource abuse (coax the bot off-topic to burn tokens)
 - Scope rule in the hardened prompt (refuse + redirect). Bounded further by the platform
