@@ -49,6 +49,9 @@ dist/
 .env.*
 !.env.demo.example
 
+# Local Claude Code config/skills (may reference infra; keep out of the public repo)
+.claude/
+
 # SQLite ou outros DBs locais (se usar)
 *.db
 *.sqlite3
