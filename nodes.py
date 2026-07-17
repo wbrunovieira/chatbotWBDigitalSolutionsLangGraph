@@ -7,11 +7,11 @@ import uuid
 import logging
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import VectorParams, Distance
-from config import DEEPSEEK_API_KEY
+from config import DEEPSEEK_API_KEY, COMPANY_TOP_K, COMPANY_SCORE_THRESHOLD
 from fastembed import TextEmbedding
 from langdetect import detect
 from deepseek_optimizer import DeepSeekOptimizer, estimate_tokens, should_skip_api_call
-from langfuse_client import start_llm_generation, end_llm_generation, get_prompt, evaluate_response, score_trace
+from langfuse_client import start_llm_generation, end_llm_generation, get_prompt, evaluate_response, score_trace, update_trace
 import tools
 import guardrails
 
@@ -214,26 +214,51 @@ Respond with ONLY JSON: {{"intent": "<greeting|request_quote|inquire_services|sh
 
     return {**state, "intent": intent, "step": "detect_intent"}
 
+# Top-k retrieval over the chunked knowledge base (see ingest.py). The score threshold
+# drops weak matches; cosine similarity, so higher is closer. Retrieval only runs for
+# on-topic intents (off_topic short-circuits earlier), so this is a relevance floor, not
+# an off-topic filter. Both are env-tunable via config so the threshold can be
+# re-calibrated from prod traces; the default suits the multilingual-query / English-KB
+# cross-lingual score range (relevant pt->en ~0.20-0.40, off-topic ~0.15).
+
+
 async def retrieve_company_context(state: dict) -> dict:
     """
-    Searches the Qdrant collection 'company_info' for the company context
-    using the embedding of the user's query.
+    Retrieve the most relevant company-knowledge chunks for the user's query from the
+    Qdrant 'company_info' collection: top-k over chunks, above a score threshold, joined
+    into the grounding context. The source chunks (section + score) are attached to the
+    Langfuse trace as citations and logged, so the threshold can be re-calibrated from
+    real traffic.
     """
     embedding = compute_embedding(state["user_input"])
+    chunks, sources = [], []
     try:
         results = state["qdrant_client"].search(
             collection_name="company_info",
             query_vector=embedding,
-            limit=1
+            limit=COMPANY_TOP_K,
+            score_threshold=COMPANY_SCORE_THRESHOLD,
         )
-        if results:
-            company_context = results[0].payload.get("company_info", "")
-        else:
-            company_context = ""
+        for r in results:
+            # "text" is the chunked schema; fall back to the legacy single-doc "company_info"
+            # key so retrieval keeps working before the first chunked ingest runs.
+            text = r.payload.get("text") or r.payload.get("company_info", "")
+            if text:
+                chunks.append(text)
+                sources.append({"section": r.payload.get("section"), "score": round(r.score, 4)})
     except Exception as e:
         logging.error("Error retrieving company context: %s", e)
-        company_context = ""
-    return {**state, "company_context": company_context, "step": "retrieve_company_context"}
+
+    logging.info("RAG retrieval for %r -> %s", state.get("user_input", "")[:60], sources)
+    company_context = "\n\n---\n\n".join(chunks)
+    if sources:
+        update_trace(state.get("langfuse_trace"), metadata={"rag_sources": sources})
+    return {
+        **state,
+        "company_context": company_context,
+        "rag_sources": sources,
+        "step": "retrieve_company_context",
+    }
 
 async def retrieve_user_context(state: dict) -> dict:
     """
@@ -623,14 +648,26 @@ async def save_log_qdrant(state: dict) -> dict:
         "vector": log_embedding,
         "payload": data_to_save,
     }
+    client = state["qdrant_client"]
     try:
-        state["qdrant_client"].upsert(
-            collection_name="chat_logs",
-            points=[point]
-        )
+        client.upsert(collection_name="chat_logs", points=[point])
         logging.info("Log saved to Qdrant successfully.")
     except Exception as e:
-        logging.error("Error saving log to Qdrant: %s", e)
+        # chat_logs is normally created at startup; if that was skipped (e.g. Qdrant was
+        # down at boot), create it now and retry once rather than silently losing memory.
+        logging.warning("chat_logs upsert failed (%s); ensuring collection and retrying", e)
+        try:
+            try:
+                client.get_collection(collection_name="chat_logs")
+            except Exception:
+                client.create_collection(
+                    collection_name="chat_logs",
+                    vectors_config=VectorParams(size=384, distance=Distance.COSINE),
+                )
+            client.upsert(collection_name="chat_logs", points=[point])
+            logging.info("Log saved to Qdrant after ensuring collection.")
+        except Exception as e2:
+            logging.error("Error saving log to Qdrant after retry: %s", e2)
 
     return state
 

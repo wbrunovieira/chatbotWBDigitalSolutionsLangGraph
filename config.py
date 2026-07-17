@@ -60,6 +60,12 @@ WBCRM_BASE_URL = os.getenv("WBCRM_BASE_URL", "http://wb-crm-backend:3010")
 WBCRM_API_TOKEN = os.getenv("WBCRM_API_TOKEN", "")
 LEAD_SOURCE_GROUP = os.getenv("LEAD_SOURCE_GROUP", "bot")
 
+# RAG retrieval tuning (see nodes.retrieve_company_context). Env-tunable so the score
+# threshold can be re-calibrated from prod traces without a code change — the default is
+# calibrated for the multilingual-query / English-KB cross-lingual score range.
+COMPANY_TOP_K = int(os.getenv("COMPANY_TOP_K", "4"))
+COMPANY_SCORE_THRESHOLD = float(os.getenv("COMPANY_SCORE_THRESHOLD", "0.2"))
+
 # schedule_meeting hands the user this direct booking link.
 BOOKING_URL = os.getenv("BOOKING_URL", "https://agenda.wbdigitalsolutions.com/book")
 

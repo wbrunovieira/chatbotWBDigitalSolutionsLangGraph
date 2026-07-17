@@ -1,5 +1,6 @@
 # main.py
 import hmac
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -12,7 +13,7 @@ import logging
 from dotenv import load_dotenv
 import config
 from config import QDRANT_HOST, QDRANT_API_KEY
-from nodes import compute_embedding
+import ingest
 from cache import get_cached_response, set_cached_response
 from hashlib import sha256
 import time
@@ -41,7 +42,33 @@ def docs_kwargs(is_production: bool) -> dict:
     return {}
 
 
-app = FastAPI(**docs_kwargs(config.IS_PRODUCTION))
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Startup: ensure the Qdrant collections exist and the knowledge base is ingested as
+    chunks (idempotent — cheap when unchanged). Moving this out of the /chat hot path means
+    a request no longer re-checks/creates collections on every call. Shutdown: flush Langfuse.
+    """
+    try:
+        client = QdrantClient(url=QDRANT_HOST, api_key=QDRANT_API_KEY)
+        # Centralized collection init. collection_exists() returns a bool, so we create only
+        # on a genuine miss — auth/network errors raise and are caught below (degrade, don't
+        # crash-loop) rather than being mistaken for "missing" and triggering a blind create.
+        for name in ("chat_logs", "company_info"):
+            if not client.collection_exists(collection_name=name):
+                client.create_collection(
+                    collection_name=name,
+                    vectors_config=VectorParams(size=384, distance=Distance.COSINE),
+                )
+        result = ingest.ingest_company_info(client)
+        logging.info("Startup KB ingest: %s", result)
+    except Exception as exc:  # never let startup init crash the app
+        logging.error("Startup init failed (continuing): %s", exc)
+    yield
+    flush_langfuse()
+
+
+app = FastAPI(lifespan=lifespan, **docs_kwargs(config.IS_PRODUCTION))
 
 
 async def require_admin(authorization: str = Header(default="")) -> None:
@@ -106,11 +133,6 @@ class ChatRequest(BaseModel):
             raise ValueError(f"message must be at most {config.MAX_MESSAGE_LENGTH} characters")
         return value
 
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Flush Langfuse on app shutdown."""
-    flush_langfuse()
 
 # CORS configuration - permitir apenas domínios específicos.
 # FastAPI is the single source of CORS headers; nginx no longer adds its own.
@@ -181,71 +203,13 @@ async def _handle_chat(payload: ChatRequest):
 
 
 
+    # Collections + KB ingest happen once at startup (see the lifespan handler), not per
+    # request. This client is still created here and injected into the graph state for
+    # retrieval and log persistence.
     qdrant = QdrantClient(
         url=QDRANT_HOST,
         api_key=QDRANT_API_KEY,
     )
-
-
-    try:
-        col_logs = qdrant.get_collection(collection_name="chat_logs")
-        # Coleção existe, não precisa fazer nada
-    except Exception as e:
-        # Coleção não existe, criar
-        logging.info("Collection 'chat_logs' not found. Creating collection...")
-        try:
-            qdrant.create_collection(
-                collection_name="chat_logs",
-                vectors_config=VectorParams(size=384, distance=Distance.COSINE)
-            )
-        except Exception as create_error:
-            # Se falhar ao criar, provavelmente já existe
-            logging.info("Collection 'chat_logs' already exists or error creating: %s", create_error)
-    
- 
-    try:
-        col_info = qdrant.get_collection(collection_name="company_info")
-        # Verificar se já tem dados
-        points_count = col_info.points_count if hasattr(col_info, 'points_count') else 0
-        if points_count == 0:
-            # Coleção existe mas está vazia, adicionar dados
-            logging.info("Collection 'company_info' is empty. Adding company data...")
-            try:
-                with open("company_info.md", "r", encoding="utf-8") as f:
-                    info = f.read()
-            except Exception as ex:
-                logging.error("Error reading company_info.md: %s", ex)
-                info = "No company information available."
-            embedding = compute_embedding(info)
-            point = {
-                "id": 1,
-                "vector": embedding,
-                "payload": {"company_info": info}
-            }
-            qdrant.upsert(collection_name="company_info", points=[point])
-    except Exception as e:
-        # Coleção não existe, criar e adicionar dados
-        logging.info("Collection 'company_info' not found. Creating and adding data...")
-        try:
-            qdrant.create_collection(
-                collection_name="company_info",
-                vectors_config=VectorParams(size=384, distance=Distance.COSINE)
-            )
-            try:
-                with open("company_info.md", "r", encoding="utf-8") as f:
-                    info = f.read()
-            except Exception as ex:
-                logging.error("Error reading company_info.md: %s", ex)
-                info = "No company information available."
-            embedding = compute_embedding(info)
-            point = {
-                "id": 1,
-                "vector": embedding,
-                "payload": {"company_info": info}
-            }
-            qdrant.upsert(collection_name="company_info", points=[point])
-        except Exception as create_error:
-            logging.info("Error with company_info collection: %s", create_error)
 
     # Criar contexto enriquecido com base na página
     page_context = ""
