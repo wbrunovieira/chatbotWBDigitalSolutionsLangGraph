@@ -1,5 +1,6 @@
 # main.py
 import hmac
+import re
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -69,6 +70,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan, **docs_kwargs(config.IS_PRODUCTION))
+
+
+def split_greeting_bubbles(text: str) -> list:
+    """
+    Split a greeting into natural chat bubbles by sentence, KEEPING each sentence's own
+    terminal punctuation. The previous approach (split on "." then re-append ".") mangled a
+    greeting that ends on a question ("...no seu negócio?" -> "...negócio?.") and mis-split
+    "WB Digital Solutions." mid-name.
+    """
+    return [s.strip() for s in re.split(r"(?<=[.?!])\s+", text.strip()) if s.strip()]
 
 
 async def require_admin(authorization: str = Header(default="")) -> None:
@@ -263,11 +274,7 @@ async def _handle_chat(payload: ChatRequest):
     # Para saudações simples, enviar resposta estruturada
     response_parts = []
     if result.get("intent") == "greeting":
-        # Dividir saudação em partes naturais
-        lines = full_response.split(".")
-        for line in lines:
-            if line.strip():
-                response_parts.append(line.strip() + ".")
+        response_parts = split_greeting_bubbles(full_response)
     else:
         # Para outras respostas, dividir em parágrafos ou frases
         # Preservar quebras de linha e estrutura

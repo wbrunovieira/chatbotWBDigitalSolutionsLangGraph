@@ -38,13 +38,25 @@ class TestGreeting:
         assert not re.search(r"\d{4,}", resp)   # no phone number
         assert "?" in resp                       # ends on a qualifying question
 
-    def test_greeting_prompt_does_not_force_contact(self):
-        # Guard against re-introducing the "ALWAYS include WhatsApp" / SLA behavior. The prompt
-        # may mention WhatsApp only in a *negative* instruction ("do NOT include").
-        from langfuse_prompts_v3 import PROMPTS_V3
+    def test_rendered_greeting_prompt_has_no_forced_contact(self):
+        # Guard the prod chain (LOCAL_PROMPTS, derived from PROMPTS_V3) against re-introducing
+        # a hardcoded contact/SLA. Asserts on the RENDERED prompt, not fragile instruction prose.
+        from langfuse_client import LOCAL_PROMPTS
 
-        prompt = PROMPTS_V3["generate_greeting"]["prompt"]
-        assert "{{whatsapp}}" not in prompt          # no contact template variable
-        assert "ALWAYS include" not in prompt        # the old forcing rule is gone
-        assert "respondemos em até" not in prompt    # no SLA promise
-        assert "qualifying question" in prompt.lower()  # engages instead
+        template = LOCAL_PROMPTS["generate_greeting"]["template"]
+        assert "{{whatsapp}}" not in template            # no contact template variable
+        assert not re.search(r"\d{4,}", template)        # no hardcoded phone number
+        assert "respondemos em até" not in template.lower()  # no SLA promise
+
+
+class TestGreetingBubbleSplit:
+    def test_keeps_question_mark_and_avoids_stray_dot(self):
+        import main
+
+        parts = main.split_greeting_bubbles(
+            "Olá! Somos a WB Digital Solutions. Você quer um site, automação ou IA?"
+        )
+        assert parts[-1].endswith("?")
+        assert not any(p.endswith("?.") or p.endswith("..") for p in parts)
+        # "WB Digital Solutions." is not mis-split into its own tiny bubble mid-name
+        assert any("WB Digital Solutions." in p for p in parts)
