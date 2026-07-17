@@ -128,7 +128,9 @@ services:
     volumes:
       - {{ install_path }}/logs:/app/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      # Use Python (present in the image) not curl — the slim base has no curl, which
+      # made this check always fail and marked the container perpetually unhealthy.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
