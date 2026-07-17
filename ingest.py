@@ -99,9 +99,10 @@ def _chunk_id(chunk: dict, model_tag: str = "") -> int:
 
 
 def _ensure_collection(client) -> None:
-    try:
-        client.get_collection(COLLECTION)
-    except Exception:
+    # App-path collection init lives in main.py's lifespan; this is the safety net for the
+    # standalone CLI (`python ingest.py`). collection_exists() cleanly distinguishes a
+    # missing collection from auth/network errors (which propagate) instead of a blind catch.
+    if not client.collection_exists(collection_name=COLLECTION):
         client.create_collection(
             collection_name=COLLECTION,
             vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),

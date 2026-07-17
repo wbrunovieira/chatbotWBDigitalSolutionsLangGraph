@@ -51,13 +51,15 @@ async def lifespan(app: FastAPI):
     """
     try:
         client = QdrantClient(url=QDRANT_HOST, api_key=QDRANT_API_KEY)
-        try:
-            client.get_collection(collection_name="chat_logs")
-        except Exception:
-            client.create_collection(
-                collection_name="chat_logs",
-                vectors_config=VectorParams(size=384, distance=Distance.COSINE),
-            )
+        # Centralized collection init. collection_exists() returns a bool, so we create only
+        # on a genuine miss — auth/network errors raise and are caught below (degrade, don't
+        # crash-loop) rather than being mistaken for "missing" and triggering a blind create.
+        for name in ("chat_logs", "company_info"):
+            if not client.collection_exists(collection_name=name):
+                client.create_collection(
+                    collection_name=name,
+                    vectors_config=VectorParams(size=384, distance=Distance.COSINE),
+                )
         result = ingest.ingest_company_info(client)
         logging.info("Startup KB ingest: %s", result)
     except Exception as exc:  # never let startup init crash the app

@@ -10,10 +10,8 @@ class FakeQdrant:
         self._exists = exists
         self.points = {}  # id -> payload
 
-    def get_collection(self, collection_name):
-        if not self._exists:
-            raise RuntimeError("missing")
-        return object()
+    def collection_exists(self, collection_name):
+        return self._exists
 
     def create_collection(self, collection_name, vectors_config):
         self._exists = True
