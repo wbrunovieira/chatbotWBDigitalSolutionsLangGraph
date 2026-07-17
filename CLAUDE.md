@@ -5,8 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ⚠️ Sempre rastreie o trabalho como issues (skill `track-work`)
 Toda melhoria, correção, feature ou débito técnico DEVE virar issue no projeto
 "chatbot-wb" (cmroypyl6001jpd01qyi04zlj) do WB Project Manager, com status em dia.
-Invoque a skill `track-work` (.claude/skills/track-work/SKILL.md). Doc da API:
-https://projects.wbdigitalsolutions.com/api/docs
+Invoque a skill `track-work` — ela é **local do operador e não versionada**
+(`.claude/` está no `.gitignore`), então num clone novo pode não existir; o board +
+a doc da API são a fonte da verdade: https://projects.wbdigitalsolutions.com/api/docs
 
 ## Project Overview
 
