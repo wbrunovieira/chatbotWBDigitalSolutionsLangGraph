@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WB Digital Solutions — chatbot demo</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#0f1220; --panel:#171a2b; --me:#3b5bfd; --bot:#242840; --text:#e8eaf2; --muted:#9aa0b5; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--text); display:flex; min-height:100vh; align-items:center; justify-content:center; padding:24px; }
+    .card { width:100%; max-width:520px; background:var(--panel); border-radius:16px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.4); display:flex; flex-direction:column; height:80vh; max-height:720px; }
+    header { padding:16px 20px; background:linear-gradient(135deg,#3b5bfd,#7a3bfd); }
+    header h1 { margin:0; font-size:16px; } header p { margin:4px 0 0; font-size:12px; color:rgba(255,255,255,.8); }
+    #log { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:12px; }
+    .msg { max-width:82%; padding:10px 14px; border-radius:14px; font-size:14px; line-height:1.45; white-space:pre-wrap; word-wrap:break-word; }
+    .me { align-self:flex-end; background:var(--me); border-bottom-right-radius:4px; }
+    .bot { align-self:flex-start; background:var(--bot); border-bottom-left-radius:4px; }
+    .meta { align-self:flex-start; font-size:11px; color:var(--muted); }
+    form { display:flex; gap:8px; padding:14px; border-top:1px solid rgba(255,255,255,.07); }
+    input { flex:1; background:var(--bg); border:1px solid rgba(255,255,255,.12); color:var(--text); border-radius:10px; padding:11px 14px; font-size:14px; }
+    input:focus { outline:2px solid var(--me); }
+    button { background:var(--me); color:#fff; border:0; border-radius:10px; padding:0 18px; font-weight:600; cursor:pointer; }
+    button:disabled { opacity:.5; cursor:default; }
+    .chips { display:flex; flex-wrap:wrap; gap:6px; padding:0 14px 12px; }
+    .chip { font-size:12px; background:var(--bot); color:var(--muted); border:0; border-radius:20px; padding:6px 12px; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <header>
+      <h1>WB Digital Solutions · assistente</h1>
+      <p>Demo local — sites, e-commerce, automação e IA</p>
+    </header>
+    <div id="log">
+      <div class="msg bot">Olá! 👋 Sou o assistente da WB. Como posso ajudar?</div>
+    </div>
+    <div class="chips">
+      <button class="chip">boa tarde</button>
+      <button class="chip">vocês fazem automação?</button>
+      <button class="chip">quanto custa um site?</button>
+      <button class="chip">meu nome é João da Padaria Central, quero um site</button>
+    </div>
+    <form id="f">
+      <input id="i" autocomplete="off" placeholder="Escreva uma mensagem…" />
+      <button id="b" type="submit">Enviar</button>
+    </form>
+  </div>
+  <script>
+    const log = document.getElementById('log'), input = document.getElementById('i'),
+          form = document.getElementById('f'), btn = document.getElementById('b');
+    const uid = 'demo-' + Math.random().toString(36).slice(2, 8);
+    function add(text, cls) { const d = document.createElement('div'); d.className = 'msg ' + cls; d.textContent = text; log.appendChild(d); log.scrollTop = log.scrollHeight; return d; }
+    async function send(text) {
+      add(text, 'me'); input.value = ''; btn.disabled = true;
+      const typing = add('…', 'bot');
+      try {
+        const r = await fetch('/chat', { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ message:text, user_id:uid, language:'pt-BR', current_page:'/', page_url:location.href, timestamp:new Date().toISOString() }) });
+        const d = await r.json();
+        if (!r.ok) {  // rate limit (429), daily budget spent (503), validation (422)…
+          typing.textContent = (typeof d.detail === 'string' ? d.detail : null)
+            || 'Estou temporariamente indisponível (HTTP ' + r.status + '). Tente de novo em instantes.';
+          btn.disabled = false; input.focus(); return;
+        }
+        typing.textContent = d.revised_response || d.raw_response || '(sem resposta)';
+        const parts = [];
+        if (d.detected_intent) parts.push('intent: ' + d.detected_intent);
+        if (d.cached) parts.push('cached');
+        if (parts.length) { const m = document.createElement('div'); m.className='meta'; m.textContent = parts.join(' · '); log.appendChild(m); }
+      } catch (e) { typing.textContent = 'Erro ao falar com a API: ' + e; }
+      btn.disabled = false; input.focus(); log.scrollTop = log.scrollHeight;
+    }
+    form.addEventListener('submit', e => { e.preventDefault(); const t = input.value.trim(); if (t) send(t); });
+    document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => send(c.textContent)));
+  </script>
+</body>
+</html>

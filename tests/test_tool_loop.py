@@ -137,3 +137,45 @@ class TestGenerateResponseWiring:
         result = await nodes.generate_response(state)
         assert result["step"] == "error_generation"
         assert "WhatsApp" in result["response"]
+
+
+class _FakeResp:
+    def __init__(self, payload):
+        self._payload = payload
+        self.headers = {}
+
+    def json(self):
+        return self._payload
+
+
+class _FakeClient:
+    def __init__(self, payload):
+        self._payload = payload
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def post(self, *args, **kwargs):
+        return _FakeResp(self._payload)
+
+
+class TestReviseResponseWiring:
+    async def test_degrades_when_api_returns_error_body_instead_of_500(self, monkeypatch):
+        # An expired/invalid DeepSeek key returns JSON without "choices". revise_response
+        # must fall back to the already-generated answer, not raise KeyError -> 500.
+        # (Reproduces the crash the one-command demo surfaced with a bad key.)
+        monkeypatch.setattr(nodes, "get_prompt", lambda *a, **k: None)
+        monkeypatch.setattr(
+            nodes.httpx, "AsyncClient",
+            lambda *a, **k: _FakeClient({"error": {"message": "Unauthorized"}}),
+        )
+        original = "Olá! Posso te ajudar com sites, automação e IA aqui mesmo."
+        state = {"response": original, "language": "pt-BR", "langfuse_trace": None}
+
+        result = await nodes.revise_response(state)
+
+        assert result["step"] == "revise_response_skipped"
+        assert result["revised_response"] == original

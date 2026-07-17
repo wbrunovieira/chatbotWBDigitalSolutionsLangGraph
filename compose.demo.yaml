@@ -1,0 +1,44 @@
+# One-command demo: API + Redis + Qdrant + a stub CRM, all self-contained.
+#
+#   cp .env.demo.example .env.demo   # then paste your DeepSeek key
+#   docker compose -f compose.demo.yaml --env-file .env.demo up --build
+#
+# Open http://localhost:8000/demo and chat. `create_lead` hits the stub CRM (not the real one).
+# NOT for production — APP_ENV=demo turns on the /demo widget and Swagger docs on purpose.
+services:
+  api:
+    build: .
+    container_name: wb_demo_api
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=demo
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - QDRANT_HOST=http://qdrant:6333
+      - QDRANT_API_KEY=
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - RATE_LIMIT_ENABLED=false
+      - ADMIN_API_TOKEN=demo
+      - WBCRM_BASE_URL=http://crm-stub:3010
+      - WBCRM_API_TOKEN=demo-token
+    depends_on:
+      - redis
+      - qdrant
+      - crm-stub
+
+  redis:
+    image: redis:7-alpine
+    container_name: wb_demo_redis
+
+  qdrant:
+    image: qdrant/qdrant:v1.18.3   # pinned so the demo stays reproducible over time
+    container_name: wb_demo_qdrant
+
+  crm-stub:
+    image: python:3.11-slim
+    container_name: wb_demo_crm
+    volumes:
+      - ./demo:/demo:ro
+    command: python /demo/crm_stub.py

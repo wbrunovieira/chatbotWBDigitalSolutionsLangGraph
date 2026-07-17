@@ -47,6 +47,7 @@ dist/
 # Configs do Pydantic Settings
 .env
 .env.*
+!.env.demo.example
 
 # SQLite ou outros DBs locais (se usar)
 *.db

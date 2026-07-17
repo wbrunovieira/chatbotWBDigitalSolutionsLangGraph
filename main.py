@@ -131,6 +131,17 @@ app.add_middleware(
     max_age=3600,
 )
 
+# Demo widget: a tiny chat UI served by the app itself (so it shares the origin and
+# needs no CORS). Mounted ONLY outside production — it is a showcase surface, never
+# something we want reachable on the live host.
+if not config.IS_PRODUCTION:
+    import os
+    from fastapi.staticfiles import StaticFiles
+
+    # Serve only the widget dir, not the whole demo/ (which holds the CRM stub source).
+    if os.path.isdir("demo/web"):
+        app.mount("/demo", StaticFiles(directory="demo/web", html=True), name="demo")
+
 @app.get("/health")
 async def health():
     return {"status": "healthy"}

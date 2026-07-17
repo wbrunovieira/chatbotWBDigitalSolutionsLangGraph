@@ -16,6 +16,41 @@
 
 ---
 
+## Try it in one command
+
+Brings up the API + Qdrant + Redis + a stub CRM, and serves a chat widget you can talk to —
+no cloud accounts, only a DeepSeek key.
+
+```bash
+cp .env.demo.example .env.demo          # paste your DEEPSEEK_API_KEY
+docker compose -f compose.demo.yaml --env-file .env.demo up --build
+# then open http://localhost:8000/demo
+```
+
+Ask *"quanto custa um site?"* or *"meu nome é João da Padaria Central, quero um site"* and
+watch the agent **capture the lead** into the (stub) CRM. The first reply takes ~20s while the
+embedding model downloads; after that it's fast. The `/demo` widget is mounted only outside
+production.
+
+<!-- Replace with the recorded demo GIF at docs/media/demo.gif once captured:
+     ![Demo](docs/media/demo.gif) -->
+> 🎥 *Recording coming — until then, the one-command demo above runs it live in ~1 minute.*
+
+## Case study
+
+**[From a leaky chatbot to a measured, tool-using agent →](docs/CASE-STUDY.md)** — how I found
+lost leads in the production logs (`"boa tarde"` was being deflected in English) and shipped the
+fix across six reviewed, CI-gated PRs. Every number is real:
+
+| | |
+|---|---|
+| Intent accuracy (incl. the real production failures) | **100%** (34/34) |
+| Tool selection on labelled action messages | **90.9%** (10/11) |
+| Prompt-injection attacks resisted / prompt leaks | **11/11** / **0** |
+| Over-refusal on benign requests | **0** (4/4 still answered) |
+| Automated tests (repo started with none) | **119** + 3 live-model eval gates |
+| Regressions reaching production | **0** — the eval gate blocks them pre-merge |
+
 ## Why it's interesting
 
 This is a real, in-production conversational agent — not a tutorial wrapper around a single LLM call. It's built as an explicit **state graph** so each step (intent detection, retrieval, generation, self-revision, logging) is observable, routable, and independently testable. It runs **without PyTorch** (ONNX embeddings via FastEmbed), so the container is small and cheap to host, and every LLM hop is traced and scored in Langfuse with versioned prompts.
