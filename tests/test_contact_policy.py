@@ -29,6 +29,12 @@ class TestContactNotForced:
 
 
 class TestContactStillAvailableOnTrigger:
-    def test_contact_response_still_provides_whatsapp(self):
-        # When the user explicitly asks for contact (share_contact intent), we DO give it.
-        assert "{{whatsapp}}" in _template("generate_contact_response")
+    def test_handoff_prompt_routes_contact_and_whatsapp_asks(self):
+        # A user asking for our contact / WhatsApp is routed to handoff_to_human, which
+        # surfaces the real number (that live path is covered in test_tools.py). Assert on the
+        # LIVE system prompt, not the dead generate_contact_response prompt.
+        import nodes
+
+        sp = nodes.TOOL_SYSTEM_PROMPT.lower()
+        assert "handoff_to_human" in sp
+        assert "whatsapp" in sp and "contact" in sp

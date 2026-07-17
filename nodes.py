@@ -354,7 +354,8 @@ TOOL_SYSTEM_PROMPT = (
     "- create_lead: when the user shares who they are (name/company) or a contact, or clearly "
     "wants a proposal — capture them as a lead.\n"
     "- schedule_meeting: when the user wants to talk, meet, or get a proposal — give them the booking link.\n"
-    "- handoff_to_human: when the user explicitly asks to talk to a person.\n"
+    "- handoff_to_human: when the user explicitly asks to talk to a person, OR asks for our "
+    "contact / WhatsApp / phone / email — this is how they get our contact details.\n"
     "Only pass details the user actually gave; never invent a name, phone or email. Do NOT discuss "
     "prices — if asked about price, capture the lead or offer to schedule instead of giving a number."
 )
@@ -464,7 +465,7 @@ async def generate_response(state: dict) -> dict:
             "Before answering, always make sure to:\n"
             "- Preserve the user's original language\n"
             "- Keep responses concise (max 3-4 paragraphs)\n"
-            "- If including contact, use ONE line: 'WhatsApp (11) 98286-4581 - respondemos em 2h!'\n\n"
+            "- Only include contact info if the user asked for it or wants a human\n\n"
         )
 
     query = f"{instruction}{augmented_input}" if augmented_input else f"{instruction}{user_input}"
