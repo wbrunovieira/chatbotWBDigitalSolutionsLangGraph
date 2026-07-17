@@ -71,7 +71,14 @@ Every quality number is reproducible: `python evals/run_intents.py`, `run_tools.
 
 ## 5. Try it
 
-`docker compose -f compose.demo.yaml up` (see the README Quickstart) brings up the API +
-Qdrant + Redis + a stub CRM and a chat widget at `http://localhost:8000/demo`. Ask
-*"quanto custa um site?"* or *"meu nome é João da Padaria Central, quero um site"* and watch it
-capture the lead. Run the evals yourself to reproduce the numbers above.
+One command brings up the API + Qdrant + Redis + a stub CRM and a chat widget at
+`http://localhost:8000/demo`:
+
+```bash
+cp .env.demo.example .env.demo          # paste your DEEPSEEK_API_KEY
+docker compose -f compose.demo.yaml --env-file .env.demo up --build
+```
+
+Ask *"quanto custa um site?"* or *"meu nome é João da Padaria Central, quero um site"* and watch
+it capture the lead. (The first reply takes ~20s while the embedding model downloads.) Run the
+evals yourself to reproduce the numbers above.

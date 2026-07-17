@@ -138,8 +138,9 @@ if not config.IS_PRODUCTION:
     import os
     from fastapi.staticfiles import StaticFiles
 
-    if os.path.isdir("demo"):
-        app.mount("/demo", StaticFiles(directory="demo", html=True), name="demo")
+    # Serve only the widget dir, not the whole demo/ (which holds the CRM stub source).
+    if os.path.isdir("demo/web"):
+        app.mount("/demo", StaticFiles(directory="demo/web", html=True), name="demo")
 
 @app.get("/health")
 async def health():

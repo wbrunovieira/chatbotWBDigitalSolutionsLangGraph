@@ -57,6 +57,11 @@
         const r = await fetch('/chat', { method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({ message:text, user_id:uid, language:'pt-BR', current_page:'/', page_url:location.href, timestamp:new Date().toISOString() }) });
         const d = await r.json();
+        if (!r.ok) {  // rate limit (429), daily budget spent (503), validation (422)…
+          typing.textContent = (typeof d.detail === 'string' ? d.detail : null)
+            || 'Estou temporariamente indisponível (HTTP ' + r.status + '). Tente de novo em instantes.';
+          btn.disabled = false; input.focus(); return;
+        }
         typing.textContent = d.revised_response || d.raw_response || '(sem resposta)';
         const parts = [];
         if (d.detected_intent) parts.push('intent: ' + d.detected_intent);

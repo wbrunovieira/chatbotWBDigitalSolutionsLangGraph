@@ -575,7 +575,14 @@ async def revise_response(state: dict) -> dict:
             cache_hit=response.headers.get("X-Cache-Status") == "hit"
         )
 
-    revised = data["choices"][0]["message"]["content"]
+    # Guard against API errors (401/429/5xx return JSON without "choices" -> KeyError).
+    # Revision is optional polish, so fall back to the already-generated answer.
+    try:
+        revised = data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError):
+        logging.error("revise_response: unexpected DeepSeek response: %s", str(data)[:200])
+        fallback = state.get("response") or state.get("revised_response") or ""
+        return {**state, "revised_response": fallback, "step": "revise_response_skipped"}
 
     # End generation AFTER LLM call
     end_llm_generation(

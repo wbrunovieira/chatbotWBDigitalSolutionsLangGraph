@@ -36,6 +36,8 @@ htmlcov/
 # Documentation
 docs/
 *.md
+# ...except the RAG knowledge base, which the app loads at runtime.
+!company_info.md
 !requirements.txt
 
 # Docker (don't copy docker files into image)

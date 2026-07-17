@@ -28,8 +28,9 @@ docker compose -f compose.demo.yaml --env-file .env.demo up --build
 ```
 
 Ask *"quanto custa um site?"* or *"meu nome é João da Padaria Central, quero um site"* and
-watch the agent **capture the lead** into the (stub) CRM. The `/demo` widget is mounted only
-outside production.
+watch the agent **capture the lead** into the (stub) CRM. The first reply takes ~20s while the
+embedding model downloads; after that it's fast. The `/demo` widget is mounted only outside
+production.
 
 <!-- Replace with the recorded demo GIF at docs/media/demo.gif once captured:
      ![Demo](docs/media/demo.gif) -->
