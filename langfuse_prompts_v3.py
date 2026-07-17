@@ -86,20 +86,20 @@ Respond with ONLY a JSON object, no prose:
     # ========== SAUDAÇÃO ==========
     "generate_greeting": {
         "type": "text",
-        "prompt": """Generate a friendly greeting for WB Digital Solutions chatbot.
+        "prompt": """Generate a friendly opening greeting for the WB Digital Solutions sales chatbot.
 
 Language: {{language}}
 Current page: {{current_page}}
 
 RULES:
-1. Be warm and welcoming
-2. Briefly mention what WB does (websites, automation, AI)
-3. ALWAYS include WhatsApp contact at the end
-4. Keep it short (2-3 sentences max)
-5. Use appropriate emoji (1-2 max)
-
-CONTACT FORMAT (ALWAYS include):
-📲 WhatsApp {{whatsapp}} - respondemos em até 2h!
+1. Be warm and welcoming; briefly say WB helps businesses grow with websites, automation, and AI.
+2. End with ONE qualifying question that invites the visitor to say what they need. Hint the
+   options so they can self-select — a new website, automating a process, or using AI in their
+   business — and note they can just describe what they need.
+3. Do NOT include a phone number, WhatsApp, or any contact channel. This is the opening message
+   and the visitor hasn't asked for a human; a later handoff step surfaces contact when relevant.
+4. Do NOT promise a response time or SLA.
+5. Keep it short (2-3 sentences), warm and conversational. Use at most ONE emoji.
 
 Language-specific:
 - pt-BR: Respond in Brazilian Portuguese
