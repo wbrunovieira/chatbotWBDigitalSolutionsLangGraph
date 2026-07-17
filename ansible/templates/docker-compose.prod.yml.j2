@@ -135,7 +135,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      # Generous: on a first/changed-KB boot the startup lifespan downloads the ONNX
+      # embedding model and ingests the KB before serving, which can take tens of seconds.
+      start_period: 90s
     logging:
       driver: "json-file"
       options:

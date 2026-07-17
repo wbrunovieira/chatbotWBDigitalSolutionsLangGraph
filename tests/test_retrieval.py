@@ -70,3 +70,37 @@ class TestRetrieveCompanyContext:
         out = await nodes.retrieve_company_context(state)
         assert out["company_context"] == ""
         assert out["step"] == "retrieve_company_context"
+
+
+class FlakyLogClient:
+    """First chat_logs upsert fails (collection missing); after ensure it succeeds."""
+
+    def __init__(self):
+        self.upserts = 0
+        self.created = False
+
+    def upsert(self, collection_name, points):
+        self.upserts += 1
+        if self.upserts == 1:
+            raise RuntimeError("collection 'chat_logs' not found")
+
+    def get_collection(self, collection_name):
+        raise RuntimeError("missing")
+
+    def create_collection(self, collection_name, vectors_config):
+        self.created = True
+
+
+class TestSaveLogRetry:
+    async def test_creates_chat_logs_and_retries_when_missing(self):
+        # If startup skipped collection creation (Qdrant was down at boot), the write path
+        # must self-heal: create chat_logs and retry, not silently drop conversation memory.
+        client = FlakyLogClient()
+        state = {
+            "user_id": "u1", "user_input": "oi", "response": "olá",
+            "revised_response": "olá!", "intent": "greeting", "language": "pt-BR",
+            "current_page": "/", "tool_results": [], "qdrant_client": client,
+        }
+        await nodes.save_log_qdrant(state)
+        assert client.created is True     # collection ensured
+        assert client.upserts == 2        # failed once, retried after create

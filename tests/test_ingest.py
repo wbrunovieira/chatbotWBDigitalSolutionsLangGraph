@@ -110,3 +110,62 @@ class TestIngestIdempotency:
         # the old "B" chunk id is gone, not left behind as a duplicate
         assert first_ids != set(client.points)
         assert len(client.points) == len(ingest.chunk_document(kb.read_text()))
+
+    def test_first_chunked_ingest_prunes_legacy_single_doc_point(self, tmp_path):
+        # The exact prod migration: prod's company_info currently holds ONE point at id=1
+        # with the legacy {"company_info": ...} payload. The first chunked ingest must
+        # replace it with chunks AND delete id=1, not leave it as a stale duplicate.
+        kb = tmp_path / "kb.md"
+        kb.write_text(MD)
+        client = FakeQdrant(exists=True)
+        client.points[1] = {"company_info": "old whole document"}
+
+        result = ingest.ingest_company_info(client, path=str(kb), embed_fn=fake_embed)
+
+        assert result["skipped"] is False
+        assert 1 not in client.points                       # legacy point pruned
+        assert all("text" in p for p in client.points.values())
+        assert len(client.points) == len(ingest.chunk_document(MD))
+
+    def test_model_swap_forces_reingest(self, tmp_path):
+        # Same KB text, different embedding model -> different ids -> not skipped, and the
+        # old-model points are pruned (guards against serving stale vectors after a swap).
+        kb = tmp_path / "kb.md"
+        kb.write_text(MD)
+        client = FakeQdrant()
+        ingest.ingest_company_info(client, path=str(kb), embed_fn=fake_embed, model_tag="model-A")
+        ids_a = set(client.points)
+
+        result = ingest.ingest_company_info(client, path=str(kb), embed_fn=fake_embed, model_tag="model-B")
+
+        assert result["skipped"] is False
+        assert result["pruned"] == len(ids_a)               # every old-model point pruned
+        assert set(client.points).isdisjoint(ids_a)         # entirely new id set
+
+    def test_existing_ids_walks_all_scroll_pages(self, tmp_path):
+        # _existing_ids must follow scroll pagination; a client that returns ids across two
+        # pages must not have the second page dropped (which would cause false re-upserts).
+        kb = tmp_path / "kb.md"
+        kb.write_text(MD)
+        client = FakeQdrant()
+        ingest.ingest_company_info(client, path=str(kb), embed_fn=fake_embed)
+        all_ids = set(client.points)
+
+        paged = _PagedQdrant(all_ids)
+        assert ingest._existing_ids(paged) == all_ids
+        assert paged.pages_served >= 2                       # pagination actually exercised
+
+
+class _PagedQdrant:
+    """Serves ids across two scroll pages to exercise the pagination loop in _existing_ids."""
+
+    def __init__(self, ids):
+        self._ids = list(ids)
+        self.pages_served = 0
+
+    def scroll(self, collection_name, limit, offset, with_payload, with_vectors):
+        start = offset or 0
+        page = self._ids[start:start + 1]                   # one id per page
+        self.pages_served += 1
+        next_offset = start + 1 if start + 1 < len(self._ids) else None
+        return [type("P", (), {"id": i})() for i in page], next_offset

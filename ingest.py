@@ -89,8 +89,12 @@ def chunk_document(text: str, max_chars: int = CHUNK_MAX_CHARS) -> list:
     return chunks
 
 
-def _chunk_id(chunk: dict) -> int:
-    digest = hashlib.sha256((chunk["section"] + "\x00" + chunk["text"]).encode("utf-8")).hexdigest()
+def _chunk_id(chunk: dict, model_tag: str = "") -> int:
+    # The point id folds in the embedding-model tag: swapping the model changes every id,
+    # so the "unchanged" skip below can't leave stale vectors from the old model behind
+    # (the KB text is identical across a model swap, so text alone would falsely match).
+    key = f"{model_tag}\x00{chunk['section']}\x00{chunk['text']}"
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
     return int(digest[:15], 16)  # 60-bit unsigned int, safely within Qdrant's uint64 id space
 
 
@@ -117,21 +121,28 @@ def _existing_ids(client) -> set:
     return ids
 
 
-def ingest_company_info(client, path: str = KB_PATH, embed_fn=None) -> dict:
+def ingest_company_info(client, path: str = KB_PATH, embed_fn=None, model_tag: str = None) -> dict:
     """
     Chunk + embed + upsert the KB, idempotently. Returns a summary dict.
 
     embed_fn defaults to nodes.compute_embedding; it's injectable so tests can run without
-    downloading the ONNX model.
+    downloading the ONNX model. model_tag defaults to the active embedding model name and is
+    folded into each point id so a model swap forces a full re-ingest (see _chunk_id).
     """
     if embed_fn is None:
         from nodes import compute_embedding as embed_fn  # lazy: avoids importing the model at import time
+    if model_tag is None:
+        try:
+            from nodes import EMBEDDING_MODEL_NAME
+            model_tag = EMBEDDING_MODEL_NAME
+        except Exception:
+            model_tag = ""
 
     with open(path, "r", encoding="utf-8") as f:
         text = f.read()
 
     chunks = chunk_document(text)
-    target = {_chunk_id(c): c for c in chunks}
+    target = {_chunk_id(c, model_tag): c for c in chunks}
 
     _ensure_collection(client)
     existing = _existing_ids(client)
