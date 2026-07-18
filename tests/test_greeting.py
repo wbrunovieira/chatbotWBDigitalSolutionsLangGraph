@@ -24,9 +24,10 @@ class TestHardcodedGreetings:
         assert out["revised_response"] == nodes.GREETINGS["en"]
         assert out["step"] == "generate_greeting_response"
 
-    async def test_unknown_or_missing_language_falls_back_to_pt(self):
+    async def test_unknown_missing_or_null_language_falls_back_to_pt(self):
         assert (await nodes.generate_greeting_response({"language": "fr"}))["response"] == nodes.GREETINGS["pt-BR"]
         assert (await nodes.generate_greeting_response({}))["response"] == nodes.GREETINGS["pt-BR"]
+        assert (await nodes.generate_greeting_response({"language": None}))["response"] == nodes.GREETINGS["pt-BR"]
 
 
 class TestGreetingBubbleSplit:
