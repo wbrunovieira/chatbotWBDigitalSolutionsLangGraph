@@ -248,7 +248,7 @@ docs/                API, deployment and optimization documentation
 - **Graph-structured, not prompt-spaghetti** — routing and fast-tracking are explicit edges, so behavior is inspectable and each node is unit-tested (`experiments/`).
 - **RAG + persistent memory** — company knowledge and past conversations are both vector-retrieved, so answers are grounded and context-aware across sessions.
 - **Production observability** — every turn is traced and scored in Langfuse, and prompts are versioned there rather than hard-coded.
-- **Cost-aware by design** — Redis short-circuiting + the DeepSeek optimizer cut redundant LLM spend, and a daily spend circuit-breaker caps worst-case cost under abuse.
+- **Cost-aware by design** — Redis short-circuiting + the DeepSeek optimizer cut redundant LLM spend, and a daily spend circuit-breaker caps worst-case cost under abuse. The model/embedding trade-offs (DeepSeek over frontier models, ONNX embeddings over PyTorch) are written down in [ADR 0001](docs/adr/0001-model-and-embedding-choices.md).
 - **Hardened for a public endpoint** — per-IP rate limiting, request-size caps, strict CORS, and locked-down infra (Qdrant/Redis off the public internet, docs disabled in prod).
 - **Tested & continuously deployed** — a mocked `pytest` suite gates every push via CI, and CD ships to production through a manual-approval Ansible pipeline.
 - **Lightweight & reproducible** — ONNX embeddings (no PyTorch) and a slim Docker image, deployed via Ansible IaC.
