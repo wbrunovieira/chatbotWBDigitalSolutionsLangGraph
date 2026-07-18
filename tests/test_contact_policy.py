@@ -13,7 +13,6 @@ class TestContactNotForced:
     def test_generation_and_revision_prompts_do_not_force_contact(self):
         for name in (
             "generate_services_response",
-            "generate_response_system",
             "generate_response_instruction",
             "revise_response",
         ):

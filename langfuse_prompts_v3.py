@@ -83,33 +83,7 @@ Respond with ONLY a JSON object, no prose:
         "config": {"model": "deepseek-chat", "temperature": 0.1},
     },
 
-    # ========== SAUDAÇÃO ==========
-    "generate_greeting": {
-        "type": "text",
-        "prompt": """Generate a friendly opening greeting for the WB Digital Solutions sales chatbot.
-
-Language: {{language}}
-Current page: {{current_page}}
-
-RULES:
-1. Be warm and welcoming; briefly say WB helps businesses grow with websites, automation, and AI.
-2. End with ONE qualifying question that invites the visitor to say what they need. Hint the
-   options so they can self-select — a new website, automating a process, or using AI in their
-   business — and note they can just describe what they need.
-3. Do NOT include a phone number, WhatsApp, or any contact channel. This is the opening message
-   and the visitor hasn't asked for a human; a later handoff step surfaces contact when relevant.
-4. Do NOT promise a response time or SLA.
-5. Keep it short (2-3 sentences), warm and conversational. Use at most ONE emoji.
-
-Language-specific:
-- pt-BR: Respond in Brazilian Portuguese
-- en: Respond in English
-- es: Respond in Spanish
-- it: Respond in Italian
-
-Generate the greeting:""",
-        "config": {"model": "deepseek-chat", "temperature": 0.7},
-    },
+    # Greetings are hardcoded (no LLM call) in nodes.GREETINGS — see the architecture guideline.
 
     # ========== OFF-TOPIC ==========
     "generate_off_topic": {
@@ -170,59 +144,9 @@ Generate response in {{language}}:""",
     # Pricing is no longer discussed in chat — a price question is routed to lead capture
     # (create_lead / schedule_meeting) instead of quoting. Prompt intentionally removed.
 
-    # ========== COMPARTILHAR CONTATO ==========
-    "generate_contact_response": {
-        "type": "text",
-        "prompt": """Generate a response sharing WB Digital Solutions contact info.
-
-User question: "{{user_input}}"
-Language: {{language}}
-
-CONTACT INFO:
-- WhatsApp: {{whatsapp}}
-- Email: {{email}}
-- Response time: Within 2 hours (business hours)
-
-RULES:
-1. Be warm and welcoming
-2. Provide all contact options clearly
-3. Emphasize fast response time
-4. Make it easy to contact (include clickable links format)
-5. Invite them to reach out
-
-Generate response in {{language}}:""",
-        "config": {"model": "deepseek-chat", "temperature": 0.7},
-    },
-
-    # ========== SISTEMA DE GERAÇÃO (para casos complexos) ==========
-    "generate_response_system": {
-        "type": "chat",
-        "prompt": [
-            {
-                "role": "system",
-                "content": """You are an assistant for WB Digital Solutions, specialized in websites, automation, and AI solutions.
-
-LANGUAGE: {{language_instruction}}
-
-CRITICAL RULES:
-1. Answer service questions helpfully and guide the user toward a next step. Do NOT paste
-   WhatsApp/phone unless the user asks to talk to a person or is clearly ready to move
-   forward — the assistant offers a booking link or a human handoff when that moment comes.
-2. For off-topic questions, politely redirect (no contact)
-3. Be concise (max 3 paragraphs)
-4. Use appropriate emoji (1-2 per response)
-
-CONTEXT:
-- Page: {{current_page}}
-- {{page_context}}
-
-COMPANY INFO:
-{{company_context}}"""
-            },
-            {"role": "user", "content": "{{user_input}}"}
-        ],
-        "config": {"model": "deepseek-chat", "temperature": 0.7},
-    },
+    # Contact-on-request is handled by the handoff_to_human tool (see nodes.TOOL_SYSTEM_PROMPT);
+    # the former generate_contact_response / generate_response_system prompts were never wired
+    # and have been removed.
 
     # ========== INSTRUÇÃO DE GERAÇÃO ==========
     "generate_response_instruction": {

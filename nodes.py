@@ -739,83 +739,42 @@ async def generate_off_topic_response(state: dict) -> dict:
         "intent": "off_topic"
     }
 
+# Deterministic opening greetings — no LLM call (per the architecture guideline: greetings
+# use hardcoded responses). They engage and end on a qualifying question, and never push
+# contact on turn 0; WhatsApp is surfaced later via handoff_to_human when the user asks.
+GREETINGS = {
+    "pt-BR": (
+        "Olá 👋! Somos a WB Digital Solutions e ajudamos empresas a crescer com sites, "
+        "automação e inteligência artificial. Para começar, você está pensando em um site "
+        "novo, em automatizar um processo ou em usar IA no seu negócio?"
+    ),
+    "en": (
+        "Hi 👋! We're WB Digital Solutions and we help businesses grow with websites, "
+        "automation, and AI. To get started, are you thinking about a new website, "
+        "automating a process, or using AI in your business?"
+    ),
+    "es": (
+        "¡Hola 👋! Somos WB Digital Solutions y ayudamos a las empresas a crecer con sitios "
+        "web, automatización e inteligencia artificial. Para empezar, ¿estás pensando en un "
+        "sitio nuevo, en automatizar un proceso o en usar IA en tu negocio?"
+    ),
+    "it": (
+        "Ciao 👋! Siamo WB Digital Solutions e aiutiamo le aziende a crescere con siti web, "
+        "automazione e intelligenza artificiale. Per iniziare, stai pensando a un nuovo sito, "
+        "ad automatizzare un processo o a usare l'IA nella tua azienda?"
+    ),
+}
+
+
 async def generate_greeting_response(state: dict) -> dict:
-    """
-    Gera saudação usando prompt do Langfuse.
-    """
-    language = state.get("language", "pt-BR")
-    current_page = state.get("current_page", "/")
-    trace = state.get("langfuse_trace")
-
-    # Buscar prompt do Langfuse
-    greeting_prompt = get_prompt("generate_greeting")
-
-    # The greeting must NOT push contact channels on turn 0 (premature CTA / deflection);
-    # it engages and ends on a qualifying question. WhatsApp is surfaced later via handoff.
-    fallback_prompt = (
-        f"Generate a warm, short opening greeting in {language} for the WB Digital Solutions "
-        "sales chatbot. Briefly say WB helps with websites, automation, and AI, then end with "
-        "ONE qualifying question inviting the visitor to say what they need (a new website, "
-        "automating a process, or using AI). Do NOT include any phone number or WhatsApp. "
-        "Use at most one emoji."
-    )
-    if greeting_prompt:
-        try:
-            prompt = greeting_prompt.compile(
-                language=language,
-                current_page=current_page,
-            )
-        except Exception as e:
-            logging.warning(f"Error compiling greeting prompt: {e}")
-            prompt = fallback_prompt
-    else:
-        prompt = fallback_prompt
-
-    try:
-        # Start generation BEFORE LLM call
-        generation = start_llm_generation(
-            trace=trace,
-            name="generate_greeting",
-            model="deepseek-chat",
-            input_messages=[{"role": "user", "content": prompt}],
-            metadata={"temperature": 0.7},
-            prompt=greeting_prompt,
-        )
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "deepseek-chat",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.7,
-                },
-            )
-            data = resp.json()
-            response = data["choices"][0]["message"]["content"].strip()
-
-            # End generation AFTER LLM call
-            end_llm_generation(
-                generation=generation,
-                output_content=response,
-                usage=data.get("usage"),
-            )
-    except Exception as e:
-        logging.error(f"Error generating greeting: {e}")
-        # Fallback minimo
-        response = ("Olá! 👋 Somos a WB Digital Solutions e ajudamos empresas a crescer com sites, "
-                    "automação e inteligência artificial. Você está pensando em um site novo, em "
-                    "automatizar um processo ou em usar IA no seu negócio?")
-
+    """Return a deterministic greeting — no LLM call (per the architecture guideline)."""
+    language = state.get("language") or "pt-BR"
+    response = GREETINGS.get(language, GREETINGS["pt-BR"])
     return {
         **state,
         "response": response,
         "revised_response": response,
-        "step": "generate_greeting_response"
+        "step": "generate_greeting_response",
     }
 
 
