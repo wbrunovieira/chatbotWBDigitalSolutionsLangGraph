@@ -70,6 +70,18 @@ LEAD_SOURCE_GROUP = os.getenv("LEAD_SOURCE_GROUP", "bot")
 COMPANY_TOP_K = int(os.getenv("COMPANY_TOP_K", "4"))
 COMPANY_SCORE_THRESHOLD = float(os.getenv("COMPANY_SCORE_THRESHOLD", "0.2"))
 
+# Short-term conversation memory: how many recent messages (user+assistant turns) to keep
+# in the checkpointed history and replay to the model. 10 = the last ~5 turns; caps the
+# context window and cost as a conversation grows.
+MAX_HISTORY_MESSAGES = int(os.getenv("MAX_HISTORY_MESSAGES", "10"))
+
+# Long-term memory: semantic recall of this user's most relevant PAST exchanges from
+# chat_logs (across sessions). Top-k above a score floor.
+USER_CONTEXT_TOP_K = int(os.getenv("USER_CONTEXT_TOP_K", "3"))
+USER_CONTEXT_SCORE_THRESHOLD = float(os.getenv("USER_CONTEXT_SCORE_THRESHOLD", "0.3"))
+# user_ids that are shared across many people — never pull a cross-user "history" for these.
+SHARED_USER_IDS = {"anon", "experiment", "", None}
+
 # schedule_meeting hands the user this direct booking link.
 BOOKING_URL = os.getenv("BOOKING_URL", "https://agenda.wbdigitalsolutions.com/book")
 

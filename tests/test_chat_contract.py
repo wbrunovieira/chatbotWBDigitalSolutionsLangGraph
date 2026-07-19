@@ -66,7 +66,7 @@ def graph_calls(monkeypatch):
     """Stub the LangGraph run and record invocations, so tests can assert it was skipped."""
     calls = []
 
-    async def fake_ainvoke(state):
+    async def fake_ainvoke(state, config=None):
         calls.append(state)
         add_request_cost(STUB_COST_USD)  # stand in for the real DeepSeek calls
         return {

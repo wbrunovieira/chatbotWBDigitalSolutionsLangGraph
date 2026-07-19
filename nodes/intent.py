@@ -107,7 +107,7 @@ off_topic.
 Respond with ONLY JSON: {{"intent": "<greeting|request_quote|inquire_services|share_contact|chat_with_agent|off_topic>"}}"""
 
     intent = "inquire_services"  # default
-    trace = state.get("langfuse_trace")
+    trace = langfuse_client.get_current_trace()
 
     try:
         optimization_headers = DeepSeekOptimizer.get_optimization_headers()

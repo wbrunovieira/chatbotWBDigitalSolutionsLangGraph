@@ -12,7 +12,7 @@ async def generate_off_topic_response(state: dict) -> dict:
     """
     user_input = state.get("user_input", "")
     language = state.get("language", "pt-BR")
-    trace = state.get("langfuse_trace")
+    trace = langfuse_client.get_current_trace()
 
     # Buscar prompt do Langfuse
     off_topic_prompt = langfuse_client.get_prompt("generate_off_topic")

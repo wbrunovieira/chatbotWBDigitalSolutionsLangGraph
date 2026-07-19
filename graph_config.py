@@ -1,5 +1,10 @@
 # graph_config.py
+from typing import Any, List
+
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
+from typing_extensions import TypedDict
+
 from nodes import (
     detect_intent,
     generate_greeting_response,
@@ -11,11 +16,36 @@ from nodes import (
     revise_response,
     save_log_qdrant
 )
-from typing import Any, Dict
 
-GraphState = Dict[str, Any]
 
-workflow = StateGraph(GraphState)
+class ChatState(TypedDict, total=False):
+    """
+    The graph state. `total=False` so nodes can return partial updates. `messages` is the
+    short-term conversation history (raw user/assistant turns, no system prompt) that the
+    checkpointer persists per thread_id — that is the working memory.
+    """
+    user_input: str
+    user_id: str
+    language: str
+    current_page: str
+    page_context: str
+    messages: List[dict]
+    memory: dict
+    metadata: dict
+    intent: str
+    company_context: str
+    user_context: str
+    augmented_input: str
+    response: str
+    revised_response: str
+    tool_results: list
+    rag_sources: list
+    instruction_prompt: Any
+    step: str
+    cached: bool
+
+
+workflow = StateGraph(ChatState)
 
 workflow.add_node("intent_detection", detect_intent)
 workflow.add_node("retrieve_company_context", retrieve_company_context)
@@ -64,4 +94,8 @@ workflow.add_edge("response_generation", "response_revision")
 workflow.add_edge("response_revision", "log_saving")
 workflow.add_edge("log_saving", END)
 
-graph = workflow.compile()
+# MemorySaver = in-process checkpointer: persists state per thread_id across requests so the
+# agent remembers the conversation. Prod runs a single uvicorn worker, so one process holds
+# all threads; the trade-off is that memory resets on restart/deploy (fine for short sales
+# chats). A persistent Redis/Postgres checkpointer needs a langgraph major bump (see ADR).
+graph = workflow.compile(checkpointer=MemorySaver())

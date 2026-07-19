@@ -24,7 +24,7 @@ from deepseek_optimizer import (
 )
 from security import enforce_chat_limits, record_spend, get_spend_snapshot
 import tools
-from langfuse_client import create_trace, update_trace, flush_langfuse, evaluate_response, score_trace
+from langfuse_client import create_trace, update_trace, flush_langfuse, evaluate_response, score_trace, set_current_trace
 
 load_dotenv()
 
@@ -236,6 +236,9 @@ async def _handle_chat(payload: ChatRequest):
         input_data={"message": user_input, "language": language, "current_page": current_page},
         metadata={"page_url": page_url, "page_context": page_context},
     )
+    # Carry the trace in a ContextVar, not in the graph state — a live trace object isn't
+    # serializable, and the checkpointer serializes the state to persist memory.
+    set_current_trace(langfuse_trace)
 
     state = {
         "user_input": user_input,
@@ -243,7 +246,8 @@ async def _handle_chat(payload: ChatRequest):
         "language": language,
         "current_page": current_page,
         "page_context": page_context,
-        "messages": [],
+        # NOTE: no "messages" here on purpose — the checkpointer holds the accumulated
+        # conversation history per thread_id; passing [] would clobber it each turn.
         "memory": {},
         "metadata": {
             "page_url": page_url,
@@ -251,10 +255,10 @@ async def _handle_chat(payload: ChatRequest):
             "language": language,
             "current_page": current_page
         },
-        "langfuse_trace": langfuse_trace,
     }
 
-    result = await graph.ainvoke(state)
+    # thread_id keys the checkpointer's per-conversation memory (see graph_config).
+    result = await graph.ainvoke(state, config={"configurable": {"thread_id": user_id}})
 
 
     # Estruturar resposta para permitir exibição natural no frontend
