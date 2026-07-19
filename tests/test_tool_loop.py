@@ -148,20 +148,6 @@ class _FakeResp:
         return self._payload
 
 
-class _FakeClient:
-    def __init__(self, payload):
-        self._payload = payload
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc):
-        return False
-
-    async def post(self, *args, **kwargs):
-        return _FakeResp(self._payload)
-
-
 class TestReviseResponseWiring:
     async def test_degrades_when_api_returns_error_body_instead_of_500(self, monkeypatch):
         # An expired/invalid DeepSeek key returns JSON without "choices". revise_response
