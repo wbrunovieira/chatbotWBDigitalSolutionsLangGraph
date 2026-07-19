@@ -291,14 +291,18 @@ async def _handle_chat(payload: ChatRequest):
     set_current_trace(langfuse_trace)
 
     thread_id = _memory_thread_id(user_id)
-    result = await graph.ainvoke(
-        _build_state(payload, page_context),
-        config={"configurable": {"thread_id": thread_id}},
-    )
-    # Ephemeral (anonymous) threads are single-use — evict them so the in-process
-    # MemorySaver doesn't grow one dead thread per anonymous request.
-    if thread_id.startswith("ephemeral-"):
-        evict_thread(thread_id)
+    # A shared/anon user_id gets a single-use ephemeral thread; evict it after the request
+    # (even on error) so the in-process MemorySaver doesn't grow one dead thread per anon
+    # request. Key off the SAME predicate _memory_thread_id uses, not the thread_id string.
+    is_ephemeral = user_id in config.SHARED_USER_IDS
+    try:
+        result = await graph.ainvoke(
+            _build_state(payload, page_context),
+            config={"configurable": {"thread_id": thread_id}},
+        )
+    finally:
+        if is_ephemeral:
+            evict_thread(thread_id)
 
     response_data = _shape_response(result, language, current_page)
     full_response = response_data["revised_response"]

@@ -25,10 +25,13 @@ class TestPurgeOldChatLogs:
         assert result["deleted"] == 7
         assert result["retention_days"] == 30
         assert abs(result["cutoff"] - (int(time.time()) - 30 * 86400)) < 5
-        # the delete used a `timestamp < cutoff` range filter
-        cond = client.deleted_selector.must[0]
-        assert cond.key == "timestamp"
-        assert cond.range.lt == result["cutoff"]
+        # the delete matches (timestamp < cutoff) OR (timestamp missing) via a `should` filter
+        conds = client.deleted_selector.should
+        range_cond = next(c for c in conds if getattr(c, "range", None) is not None)
+        assert range_cond.key == "timestamp"
+        assert range_cond.range.lt == result["cutoff"]
+        empty_cond = next(c for c in conds if getattr(c, "is_empty", None) is not None)
+        assert empty_cond.is_empty.key == "timestamp"
 
     def test_noop_when_nothing_is_old(self):
         client = FakeClient(count=0)

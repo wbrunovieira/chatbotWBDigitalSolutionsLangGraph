@@ -14,16 +14,35 @@ how long even the redacted record is kept.
 import logging
 import time
 
-from qdrant_client.http.models import FieldCondition, Filter, Range
+from qdrant_client.http.models import (
+    FieldCondition,
+    Filter,
+    IsEmptyCondition,
+    PayloadField,
+    Range,
+)
 
 from config import CHAT_LOGS_RETENTION_DAYS
 
 
 def purge_old_chat_logs(client, retention_days: int = None) -> dict:
-    """Delete chat_logs points whose `timestamp` is older than the retention window."""
+    """Delete chat_logs points whose `timestamp` is older than the retention window.
+
+    Also deletes points that carry NO `timestamp` payload at all: a range filter silently
+    skips fieldless points, so legacy records written before save_log_qdrant stamped a
+    timestamp would otherwise be immortal (an LGPD-completeness gap). Every point written
+    today gets a timestamp, so the only fieldless points are pre-field legacy ones — safe
+    to treat as stale.
+    """
     retention_days = CHAT_LOGS_RETENTION_DAYS if retention_days is None else retention_days
     cutoff = int(time.time()) - retention_days * 86400
-    stale = Filter(must=[FieldCondition(key="timestamp", range=Range(lt=cutoff))])
+    # OR: timestamp older than cutoff, OR no timestamp field at all (legacy).
+    stale = Filter(
+        should=[
+            FieldCondition(key="timestamp", range=Range(lt=cutoff)),
+            IsEmptyCondition(is_empty=PayloadField(key="timestamp")),
+        ]
+    )
 
     before = client.count(collection_name="chat_logs", count_filter=stale).count
     if before:
