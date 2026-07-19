@@ -1,6 +1,7 @@
 # main.py
 import hmac
 import re
+import uuid
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -24,7 +25,7 @@ from deepseek_optimizer import (
 )
 from security import enforce_chat_limits, record_spend, get_spend_snapshot
 import tools
-from langfuse_client import create_trace, update_trace, flush_langfuse, evaluate_response, score_trace
+from langfuse_client import create_trace, update_trace, flush_langfuse, evaluate_response, score_trace, set_current_trace
 
 load_dotenv()
 
@@ -69,6 +70,19 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan, **docs_kwargs(config.IS_PRODUCTION))
+
+
+def _memory_thread_id(user_id: str) -> str:
+    """
+    Checkpointer thread key for conversation memory. A real user_id keys stable per-
+    conversation memory; a SHARED/anonymous id (the "anon" default) must NOT share a thread
+    — that would leak one visitor's conversation to another — so it gets an ephemeral,
+    per-request thread (isolated, effectively no cross-request memory) until the frontend
+    sends a stable per-session id.
+    """
+    if user_id in config.SHARED_USER_IDS:
+        return f"ephemeral-{uuid.uuid4()}"
+    return user_id
 
 
 def split_greeting_bubbles(text: str) -> list:
@@ -203,8 +217,10 @@ async def _handle_chat(payload: ChatRequest):
     # Log dos dados recebidos para debug
     logging.info(f"Request received - User: {user_id}, Language: {language}, Page: {current_page}")
 
-    # VERIFICAÇÃO: Cache Redis para mensagens exatas (mantido para performance)
-    cache_data = f"{user_input}_{language}_{current_page}"
+    # Exact-match Redis cache. The key includes user_id so one visitor's answer is never
+    # served to another (responses are conversation-dependent now that memory exists), and
+    # we only WRITE the cache for context-free turns (see below).
+    cache_data = f"{user_input}_{language}_{current_page}_{user_id}"
     cache_key = sha256(cache_data.encode('utf-8')).hexdigest()
 
     cached_result = await get_cached_response(cache_key)
@@ -236,6 +252,9 @@ async def _handle_chat(payload: ChatRequest):
         input_data={"message": user_input, "language": language, "current_page": current_page},
         metadata={"page_url": page_url, "page_context": page_context},
     )
+    # Carry the trace in a ContextVar, not in the graph state — a live trace object isn't
+    # serializable, and the checkpointer serializes the state to persist memory.
+    set_current_trace(langfuse_trace)
 
     state = {
         "user_input": user_input,
@@ -243,7 +262,8 @@ async def _handle_chat(payload: ChatRequest):
         "language": language,
         "current_page": current_page,
         "page_context": page_context,
-        "messages": [],
+        # NOTE: no "messages" here on purpose — the checkpointer holds the accumulated
+        # conversation history per thread_id; passing [] would clobber it each turn.
         "memory": {},
         "metadata": {
             "page_url": page_url,
@@ -251,10 +271,9 @@ async def _handle_chat(payload: ChatRequest):
             "language": language,
             "current_page": current_page
         },
-        "langfuse_trace": langfuse_trace,
     }
 
-    result = await graph.ainvoke(state)
+    result = await graph.ainvoke(state, config={"configurable": {"thread_id": _memory_thread_id(user_id)}})
 
 
     # Estruturar resposta para permitir exibição natural no frontend
@@ -306,7 +325,11 @@ async def _handle_chat(payload: ChatRequest):
         except Exception as e:
             logging.warning(f"Evaluation failed: {e}")
 
-    await set_cached_response(cache_key, response_data)
+    # Only cache CONTEXT-FREE turns. Once a conversation has history (messages accumulates
+    # 2 entries per turn), the answer depends on that history, so caching it by message would
+    # serve a stale, context-free answer on the next hit. A first turn has <= 2 messages.
+    if len(result.get("messages", [])) <= 2:
+        await set_cached_response(cache_key, response_data)
 
     return response_data
 

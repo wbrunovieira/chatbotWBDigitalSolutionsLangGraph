@@ -111,3 +111,35 @@ class TestSaveLogRetry:
         await nodes.save_log_qdrant(state)
         assert client.created is True     # collection ensured
         assert client.upserts == 2        # failed once, retried after create
+
+
+class TestRetrieveUserContext:
+    """Long-term memory: semantic recall of a user's past exchanges (#10)."""
+
+    async def test_skips_shared_user_ids_without_touching_qdrant(self):
+        client = FakeQdrant(raise_on_search=True)  # would raise if search were called
+        db.set_qdrant_client(client)
+        for shared in ("anon", "experiment", ""):
+            out = await nodes.retrieve_user_context({"user_input": "oi", "user_id": shared})
+            assert out["user_context"] == ""
+        assert client.last_kwargs is None  # never searched
+
+    async def test_recalls_past_exchanges_with_query_embedding(self):
+        client = FakeQdrant(results=[
+            FakePoint({"user_input": "quero um site", "response": "Fazemos sites sob medida."}, 0.7),
+            FakePoint({"user_input": "e prazo?", "response": "4 a 12 semanas."}, 0.5),
+        ])
+        db.set_qdrant_client(client)
+        out = await nodes.retrieve_user_context({"user_input": "quanto custa?", "user_id": "u-42"})
+
+        assert "User: quero um site" in out["user_context"]
+        assert "Assistant: Fazemos sites sob medida." in out["user_context"]
+        # the real query embedding is used, not the old zero vector
+        assert client.last_kwargs["query_vector"] == [0.1] * 384
+        assert client.last_kwargs["query_vector"] != [0.0] * 384
+
+    async def test_degrades_to_empty_on_qdrant_error(self):
+        db.set_qdrant_client(FakeQdrant(raise_on_search=True))
+        out = await nodes.retrieve_user_context({"user_input": "oi", "user_id": "u-42"})
+        assert out["user_context"] == ""
+        assert out["step"] == "retrieve_user_context"

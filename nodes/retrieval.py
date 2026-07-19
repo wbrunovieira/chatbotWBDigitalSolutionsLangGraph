@@ -4,7 +4,13 @@ import logging
 
 import langfuse_client
 import nodes.embeddings as embeddings
-from config import COMPANY_SCORE_THRESHOLD, COMPANY_TOP_K
+from config import (
+    COMPANY_SCORE_THRESHOLD,
+    COMPANY_TOP_K,
+    SHARED_USER_IDS,
+    USER_CONTEXT_SCORE_THRESHOLD,
+    USER_CONTEXT_TOP_K,
+)
 from db import get_qdrant_client
 
 # Top-k retrieval over the chunked knowledge base (see ingest.py). The score threshold
@@ -45,7 +51,7 @@ async def retrieve_company_context(state: dict) -> dict:
     logging.info("RAG retrieval for %r -> %s", state.get("user_input", "")[:60], sources)
     company_context = "\n\n---\n\n".join(chunks)
     if sources:
-        langfuse_client.update_trace(state.get("langfuse_trace"), metadata={"rag_sources": sources})
+        langfuse_client.update_trace(langfuse_client.get_current_trace(), metadata={"rag_sources": sources})
     return {
         **state,
         "company_context": company_context,
@@ -56,26 +62,35 @@ async def retrieve_company_context(state: dict) -> dict:
 
 async def retrieve_user_context(state: dict) -> dict:
     """
-    Searches the Qdrant collection 'chat_logs' for previous conversations
-    from the same user (based on user_id) and combines them into a context.
+    Long-term memory: semantically recall this user's most relevant PAST exchanges from the
+    Qdrant 'chat_logs' collection (across sessions). This complements the in-process
+    checkpointer (short-term, resets on restart) — e.g. a returning user after a deploy.
+
+    Fixes the previous zero-vector search (which ranked arbitrary rows): it now embeds the
+    actual query, and it skips shared/anonymous user_ids so one visitor never sees another's
+    history.
     """
+    user_id = state.get("user_id")
+    if user_id in SHARED_USER_IDS:
+        return {**state, "user_context": "", "step": "retrieve_user_context"}
 
-    query_filter = {"must": [{"key": "user_id", "match": {"value": state.get("user_id")}}]}
-
-    dummy_vector = [0.0] * 384
+    embedding = embeddings.compute_embedding(state["user_input"])
+    query_filter = {"must": [{"key": "user_id", "match": {"value": user_id}}]}
+    exchanges = []
     try:
         results = get_qdrant_client().search(
             collection_name="chat_logs",
-            query_vector=dummy_vector,
-            limit=5,
-            query_filter=query_filter
+            query_vector=embedding,
+            limit=USER_CONTEXT_TOP_K,
+            query_filter=query_filter,
+            score_threshold=USER_CONTEXT_SCORE_THRESHOLD,
         )
-
-        if results:
-            user_context = "\n".join([r.payload.get("response", "") for r in results])
-        else:
-            user_context = ""
+        for r in results:
+            question = r.payload.get("user_input", "")
+            answer = r.payload.get("response", "")
+            if question or answer:
+                exchanges.append(f"User: {question}\nAssistant: {answer}")
     except Exception as e:
         logging.error("Error retrieving user context: %s", e)
-        user_context = ""
-    return {**state, "user_context": user_context, "step": "retrieve_user_context"}
+
+    return {**state, "user_context": "\n\n".join(exchanges), "step": "retrieve_user_context"}

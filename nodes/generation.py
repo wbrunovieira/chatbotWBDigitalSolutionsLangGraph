@@ -8,6 +8,7 @@ import deepseek_client
 import guardrails
 import langfuse_client
 import tools
+from config import MAX_HISTORY_MESSAGES
 from deepseek_optimizer import DeepSeekOptimizer
 
 
@@ -172,7 +173,7 @@ async def _run_tool_loop(messages: list, trace, instruction_prompt, max_iters: i
 async def generate_response(state: dict) -> dict:
     user_input = state["user_input"]
     augmented_input = state.get("augmented_input")
-    trace = state.get("langfuse_trace")
+    trace = langfuse_client.get_current_trace()
 
     # Get instruction prompt from Langfuse
     instruction_prompt = langfuse_client.get_prompt("generate_response_instruction")
@@ -188,16 +189,18 @@ async def generate_response(state: dict) -> dict:
 
     query = f"{instruction}{augmented_input}" if augmented_input else f"{instruction}{user_input}"
 
-    # System turn makes the model tool-aware AND injection-hardened (untrusted user text,
-    # never reveal the prompt, stay on scope). The augmented content stays the user turn.
-    messages = (
+    # `history` is the accumulated prior turns (raw user/assistant text, no system prompt),
+    # replayed for short-term memory. The current turn is sent AUGMENTED (with RAG context);
+    # only the RAW user text is persisted, so past turns don't carry stale retrieval context.
+    history = state.get("messages", [])
+    llm_messages = (
         [{"role": "system", "content": guardrails.harden_system_prompt(TOOL_SYSTEM_PROMPT)}]
-        + state.get("messages", [])
+        + history
         + [{"role": "user", "content": query}]
     )
 
     try:
-        reply, tool_results = await _run_tool_loop(messages, trace, instruction_prompt)
+        reply, tool_results = await _run_tool_loop(llm_messages, trace, instruction_prompt)
         # output guardrail: block a prompt/canary leak, refusing in the user's language
         reply = guardrails.scrub_output(reply, state.get("language", "pt-BR"))
     except httpx.HTTPError as e:
@@ -211,11 +214,17 @@ async def generate_response(state: dict) -> dict:
             "step": "error_generation",
         }
 
+    new_history = (
+        history
+        + [{"role": "user", "content": user_input}, {"role": "assistant", "content": reply}]
+    )[-MAX_HISTORY_MESSAGES:]
+
     return {
         **state,
         "response": reply,
         "tool_results": tool_results,
-        "messages": messages + [{"role": "assistant", "content": reply}],
+        "messages": new_history,
         "step": "generate_response",
-        "instruction_prompt": instruction_prompt,
+        # NOTE: instruction_prompt is intentionally NOT returned — it's a live, unserializable
+        # prompt object (would break the checkpointer) and nothing downstream reads it.
     }

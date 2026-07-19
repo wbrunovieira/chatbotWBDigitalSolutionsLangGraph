@@ -44,7 +44,7 @@ async def revise_response(state: dict) -> dict:
             "step": "revision_skipped"
         }
 
-    trace = state.get("langfuse_trace")
+    trace = langfuse_client.get_current_trace()
 
     # Get revision prompt from Langfuse
     revise_prompt = langfuse_client.get_prompt("revise_response")

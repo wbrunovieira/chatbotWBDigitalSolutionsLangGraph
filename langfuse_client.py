@@ -3,6 +3,7 @@
 Langfuse client for tracing LLM calls and prompt management.
 Provides a singleton client instance and helper functions.
 """
+import contextvars
 import logging
 import json
 import re
@@ -12,6 +13,21 @@ from langfuse_prompts_v3 import PROMPTS_V3
 
 # Initialize Langfuse client (lazy)
 _langfuse_client = None
+
+# The per-request Langfuse trace, carried in a ContextVar rather than in the graph state.
+# A trace is a live, non-serializable object; keeping it out of state is what lets the
+# LangGraph checkpointer serialize the state to persist conversation memory. The context
+# propagates into the graph's async nodes the same way the request-cost/client-ip
+# ContextVars already do.
+_current_trace: contextvars.ContextVar = contextvars.ContextVar("langfuse_trace", default=None)
+
+
+def set_current_trace(trace) -> None:
+    _current_trace.set(trace)
+
+
+def get_current_trace():
+    return _current_trace.get()
 
 # Local fallback prompts, DERIVED from the single canonical source
 # (langfuse_prompts_v3.PROMPTS_V3). Used when Langfuse is unreachable. Deriving instead

@@ -66,7 +66,7 @@ def graph_calls(monkeypatch):
     """Stub the LangGraph run and record invocations, so tests can assert it was skipped."""
     calls = []
 
-    async def fake_ainvoke(state):
+    async def fake_ainvoke(state, config=None):
         calls.append(state)
         add_request_cost(STUB_COST_USD)  # stand in for the real DeepSeek calls
         return {
@@ -237,3 +237,13 @@ class TestSpendCap:
         # A cache hit skips DeepSeek entirely, so it must not consume budget either.
         snapshot = await security.get_spend_snapshot()
         assert snapshot["spent_usd"] == pytest.approx(STUB_COST_USD)
+
+    async def test_cache_is_isolated_per_user(self, client, graph_calls):
+        # Now that responses are conversation-dependent, one visitor's cached answer must
+        # never be served to another — the cache key includes user_id.
+        await post(client, {**VALID_PAYLOAD, "user_id": "user-A"})
+        assert len(graph_calls) == 1
+
+        other = await post(client, {**VALID_PAYLOAD, "user_id": "user-B"})
+        assert other.json()["cached"] is False
+        assert len(graph_calls) == 2, "a different user must not get another user's cached answer"
