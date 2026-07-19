@@ -5,6 +5,7 @@ The widget posts {message, user_id, language, current_page, page_url, timestamp}
 reads back a fixed response shape. Hardening must not move either.
 """
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -271,3 +272,61 @@ class TestHandleChatHelpers:
         )
         assert out["is_greeting"] is False
         assert out["response_parts"] == ["Parágrafo um.", "Parágrafo dois."]
+
+
+class TestLanguageNormalization:
+    """The widget doesn't always send a language; the request must never carry None."""
+
+    def test_explicit_language_is_kept(self):
+        req = main.ChatRequest(message="oi", language="en", page_url="https://x.com/pt/home")
+        assert req.language == "en"
+
+    def test_missing_language_derives_from_page_locale(self):
+        req = main.ChatRequest(message="oi", current_page="/en/services")
+        assert req.language == "en"
+
+    def test_null_language_button_click_defaults_to_pt(self):
+        # A button click ("Ver serviços") posts language: null on a locale-less page.
+        req = main.ChatRequest(message="Ver serviços", language=None, current_page="/")
+        assert req.language == "pt-BR"
+
+
+class TestJudgeSampling:
+    """The judge scores answers off the hot path — sampled and in a background task."""
+
+    async def test_no_trace_is_a_no_op(self, monkeypatch):
+        called = []
+
+        async def fake_eval(**kwargs):
+            called.append(kwargs)
+
+        monkeypatch.setattr(main, "evaluate_response", fake_eval)
+        main._maybe_schedule_judge(None, "hi", "resp", {"intent": "inquire_services"})
+        await asyncio.sleep(0.02)
+        assert called == []
+
+    async def test_sampled_judge_runs_in_the_background(self, monkeypatch):
+        called = []
+
+        async def fake_eval(**kwargs):
+            called.append(kwargs)
+
+        monkeypatch.setattr(main, "evaluate_response", fake_eval)
+        monkeypatch.setattr(main.config, "JUDGE_SAMPLE_RATE", 1.0)
+
+        main._maybe_schedule_judge(object(), "hi", "resp", {"intent": "inquire_services"})
+        assert called == [], "judge must not run inline on the request path"
+        await asyncio.sleep(0.02)
+        assert len(called) == 1 and called[0]["intent"] == "inquire_services"
+
+    async def test_greeting_is_not_judged(self, monkeypatch):
+        called = []
+
+        async def fake_eval(**kwargs):
+            called.append(kwargs)
+
+        monkeypatch.setattr(main, "evaluate_response", fake_eval)
+        monkeypatch.setattr(main.config, "JUDGE_SAMPLE_RATE", 1.0)
+        main._maybe_schedule_judge(object(), "oi", "Olá!", {"intent": "greeting"})
+        await asyncio.sleep(0.02)
+        assert called == []

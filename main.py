@@ -1,5 +1,7 @@
 # main.py
+import asyncio
 import hmac
+import random
 import re
 import uuid
 from contextlib import asynccontextmanager
@@ -26,6 +28,7 @@ from deepseek_optimizer import (
 from security import enforce_chat_limits, record_spend, get_spend_snapshot
 import tools
 import guardrails
+from language import resolve_language
 from langfuse_client import create_trace, update_trace, flush_langfuse, evaluate_response, score_trace, set_current_trace
 
 load_dotenv()
@@ -146,6 +149,23 @@ class ChatRequest(BaseModel):
             return {key: value for key, value in data.items() if value is not None}
         return data
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_language(cls, data: Any) -> Any:
+        # The widget doesn't always send `language` (button clicks post none, some builds
+        # send ""), which used to log as language=None and answer in the wrong language.
+        # Resolve it here: explicit value, else the page's locale segment, else pt-BR — so
+        # every request reaches the graph with a supported code. Order-independent w.r.t.
+        # treat_null_as_missing (a stripped/blank language is treated the same as missing).
+        if isinstance(data, dict):
+            data = dict(data)
+            data["language"] = resolve_language(
+                data.get("language"),
+                data.get("page_url", ""),
+                data.get("current_page", ""),
+            )
+        return data
+
     @field_validator("message")
     @classmethod
     def validate_message(cls, value: str) -> str:
@@ -264,6 +284,42 @@ def _shape_response(result: dict, language: str, current_page: str) -> dict:
     }
 
 
+# Strong refs to in-flight background judge tasks so they aren't garbage-collected before
+# they finish (asyncio only keeps weak refs); each removes itself on completion.
+_BACKGROUND_TASKS: set = set()
+
+
+async def _run_judge(langfuse_trace, user_input: str, response: str, intent: str) -> None:
+    try:
+        await evaluate_response(
+            trace=langfuse_trace,
+            user_input=user_input,
+            response=response,
+            intent=intent,
+            llm_client=True,
+        )
+    except Exception as exc:
+        logging.warning("Evaluation failed: %s", exc)
+
+
+def _maybe_schedule_judge(langfuse_trace, user_input: str, response: str, result: dict) -> None:
+    """Sample ~JUDGE_SAMPLE_RATE of LLM-driven answers and score them in a background task.
+
+    Keeps the second LLM call off the request path (the visitor never waits on it). No-op
+    when Langfuse is disabled (no trace) or for hardcoded greetings, which have no generated
+    answer worth scoring.
+    """
+    if not langfuse_trace or result.get("intent") == "greeting":
+        return
+    if random.random() >= config.JUDGE_SAMPLE_RATE:
+        return
+    task = asyncio.create_task(
+        _run_judge(langfuse_trace, user_input, response, result.get("intent", "unknown"))
+    )
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)
+
+
 async def _handle_chat(payload: ChatRequest):
     user_id = payload.user_id
     language = payload.language
@@ -313,18 +369,8 @@ async def _handle_chat(payload: ChatRequest):
         metadata={"final_step": result.get("step"), "cached": False},
     )
 
-    # Evaluate non-cached, LLM-driven responses (non-blocking best-effort).
-    if langfuse_trace and result.get("step") not in ["cached_response", "revision_skipped"]:
-        try:
-            await evaluate_response(
-                trace=langfuse_trace,
-                user_input=payload.message,
-                response=full_response,
-                intent=result.get("intent", "unknown"),
-                llm_client=True,
-            )
-        except Exception as e:
-            logging.warning(f"Evaluation failed: {e}")
+    # LLM-as-judge scoring runs sampled and in the background, never blocking the response.
+    _maybe_schedule_judge(langfuse_trace, payload.message, full_response, result)
 
     # Only cache CONTEXT-FREE turns: once a conversation has history (messages grows 2/turn),
     # the answer depends on it, so caching by message would serve a stale answer. First turn <= 2.
