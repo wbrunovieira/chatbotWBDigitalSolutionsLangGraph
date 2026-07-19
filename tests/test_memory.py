@@ -80,3 +80,25 @@ class TestThreadIsolationForSharedUsers:
         assert t1 != t2                       # two anon visitors do NOT share memory
         assert t1.startswith("ephemeral-")
         assert main._memory_thread_id("")  != main._memory_thread_id("")   # empty id too
+
+
+class TestEphemeralThreadEviction:
+    def test_evict_thread_removes_it_and_leaves_others(self):
+        import graph_config
+
+        saver = graph_config.graph.checkpointer
+        saver.storage["ephemeral-xyz"] = {"fake": "checkpoint"}
+        saver.writes[("ephemeral-xyz", "", "task-1")] = ["w"]
+        saver.writes[("real-user", "", "task-1")] = ["w"]
+
+        graph_config.evict_thread("ephemeral-xyz")
+
+        assert "ephemeral-xyz" not in saver.storage
+        assert not any(k[0] == "ephemeral-xyz" for k in saver.writes)
+        assert any(k[0] == "real-user" for k in saver.writes)  # other threads untouched
+
+        saver.writes.pop(("real-user", "", "task-1"), None)  # cleanup
+
+    def test_evict_is_safe_on_unknown_thread(self):
+        import graph_config
+        graph_config.evict_thread("never-existed")  # must not raise

@@ -84,6 +84,9 @@ USER_CONTEXT_SCORE_THRESHOLD = float(os.getenv("USER_CONTEXT_SCORE_THRESHOLD", "
 # user_ids that are shared across many people — never pull a cross-user "history" for these.
 SHARED_USER_IDS = {"anon", "experiment", "", None}
 
+# LGPD retention: delete chat_logs points older than this many days (run by retention.py).
+CHAT_LOGS_RETENTION_DAYS = int(os.getenv("CHAT_LOGS_RETENTION_DAYS", "90"))
+
 # schedule_meeting hands the user this direct booking link.
 BOOKING_URL = os.getenv("BOOKING_URL", "https://agenda.wbdigitalsolutions.com/book")
 
