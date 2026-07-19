@@ -67,7 +67,9 @@ in-process saver can't.
   memory is also its only garbage collection. At single-worker scale with regular deploys
   this is acceptable (each thread is itself capped at `MAX_HISTORY_MESSAGES`), but a
   long-uptime worker with many distinct users would grow unbounded → a periodic thread
-  sweep (or the Redis checkpointer with TTLs) is the fix when it matters.
+  sweep (or the Redis checkpointer with TTLs) is the fix when it matters. The anon-isolation
+  fix (each anonymous request mints a fresh `ephemeral-<uuid>` thread, never reused)
+  *accelerates* this — so eviction should land with the persistent-checkpointer follow-up.
 - Tier 2 recall quality is capped by the `chat_logs` embedding (a combined user+response+intent
   blob) and the English-centric embedder — decent, not great. A dedicated turn-level embedding
   would improve it.
