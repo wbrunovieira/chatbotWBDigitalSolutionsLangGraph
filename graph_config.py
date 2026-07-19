@@ -99,3 +99,27 @@ workflow.add_edge("log_saving", END)
 # all threads; the trade-off is that memory resets on restart/deploy (fine for short sales
 # chats). A persistent Redis/Postgres checkpointer needs a langgraph major bump (see ADR).
 graph = workflow.compile(checkpointer=MemorySaver())
+
+
+def evict_thread(thread_id: str) -> None:
+    """
+    Drop a thread's checkpoints from the in-process MemorySaver. Used for single-use
+    ephemeral (anonymous) threads so they don't accumulate for the process lifetime.
+
+    Reaches into MemorySaver internals (`.storage` / `.writes`) because langgraph 0.3.18
+    has no public delete_thread; guarded so a langgraph-internals change can't crash a
+    request. (When the persistent Redis/Postgres checkpointer lands with TTLs, drop this.)
+    """
+    import logging
+
+    saver = graph.checkpointer
+    try:
+        storage = getattr(saver, "storage", None)
+        if storage is not None:
+            storage.pop(thread_id, None)
+        writes = getattr(saver, "writes", None)
+        if writes is not None:
+            for key in [k for k in writes if k and k[0] == thread_id]:
+                writes.pop(key, None)
+    except Exception as exc:  # never let eviction break a request
+        logging.warning("evict_thread(%s) failed: %s", thread_id, exc)

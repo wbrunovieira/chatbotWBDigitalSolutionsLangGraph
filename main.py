@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from qdrant_client.http.models import VectorParams, Distance
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from graph_config import graph
+from graph_config import graph, evict_thread
 import logging
 from dotenv import load_dotenv
 import config
@@ -290,10 +290,15 @@ async def _handle_chat(payload: ChatRequest):
     # and the checkpointer serializes the state).
     set_current_trace(langfuse_trace)
 
+    thread_id = _memory_thread_id(user_id)
     result = await graph.ainvoke(
         _build_state(payload, page_context),
-        config={"configurable": {"thread_id": _memory_thread_id(user_id)}},
+        config={"configurable": {"thread_id": thread_id}},
     )
+    # Ephemeral (anonymous) threads are single-use — evict them so the in-process
+    # MemorySaver doesn't grow one dead thread per anonymous request.
+    if thread_id.startswith("ephemeral-"):
+        evict_thread(thread_id)
 
     response_data = _shape_response(result, language, current_page)
     full_response = response_data["revised_response"]
