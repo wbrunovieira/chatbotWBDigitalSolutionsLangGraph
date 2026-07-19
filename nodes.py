@@ -6,13 +6,14 @@ import time
 import uuid
 import logging
 from qdrant_client.http.models import VectorParams, Distance
-from config import DEEPSEEK_API_KEY, COMPANY_TOP_K, COMPANY_SCORE_THRESHOLD
+from config import COMPANY_TOP_K, COMPANY_SCORE_THRESHOLD
 from fastembed import TextEmbedding
 from langdetect import detect
 from deepseek_optimizer import DeepSeekOptimizer, estimate_tokens, should_skip_api_call
 from langfuse_client import start_llm_generation, end_llm_generation, get_prompt, evaluate_response, score_trace, update_trace
 import tools
 import guardrails
+import deepseek_client
 from db import get_qdrant_client
 
 
@@ -160,28 +161,18 @@ Respond with ONLY JSON: {{"intent": "<greeting|request_quote|inquire_services|sh
             prompt=intent_prompt,
         )
 
-        request_body = {
-            "model": "deepseek-chat",
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.1,
-        }
         # DeepSeek's json_object mode 400s unless the prompt contains the word "json".
         # Only request it when the (possibly Langfuse-served, possibly stale) prompt
         # actually asks for JSON; otherwise let parse_intent handle free text. This
         # keeps a prompt/code mismatch from silently breaking intent detection.
-        if "json" in prompt.lower():
-            request_body["response_format"] = {"type": "json_object"}
+        response_format = {"type": "json_object"} if "json" in prompt.lower() else None
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                    "Content-Type": "application/json",
-                    **optimization_headers
-                },
-                json=request_body,
-            )
+        response = await deepseek_client.chat_completion(
+            [{"role": "user", "content": prompt}],
+            temperature=0.1,
+            response_format=response_format,
+            extra_headers=optimization_headers,
+        )
         data = response.json()
 
         usage = data.get("usage", {})
@@ -363,20 +354,12 @@ TOOL_SYSTEM_PROMPT = (
 
 async def _deepseek_chat(messages: list, temperature: float = 0.7, use_tools: bool = False) -> dict:
     """Single DeepSeek chat call. Returns the parsed JSON. Offers the tools when asked."""
-    body = {"model": "deepseek-chat", "messages": messages, "temperature": temperature}
-    if use_tools:
-        body["tools"] = tools.TOOL_SPECS
-        body["tool_choice"] = "auto"
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(
-            "https://api.deepseek.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                "Content-Type": "application/json",
-                **DeepSeekOptimizer.get_optimization_headers(),
-            },
-            json=body,
-        )
+    resp = await deepseek_client.chat_completion(
+        messages,
+        temperature=temperature,
+        tools=tools.TOOL_SPECS if use_tools else None,
+        extra_headers=DeepSeekOptimizer.get_optimization_headers(),
+    )
     try:
         return resp.json()
     except ValueError:
@@ -566,20 +549,11 @@ async def revise_response(state: dict) -> dict:
             prompt=revise_prompt if revise_prompt else None,
         )
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                    "Content-Type": "application/json",
-                    **optimization_headers
-                },
-                json={
-                    "model": "deepseek-chat",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.5
-                }
-            )
+        response = await deepseek_client.chat_completion(
+            [{"role": "user", "content": prompt}],
+            temperature=0.5,
+            extra_headers=optimization_headers,
+        )
     except httpx.ReadTimeout:
         logging.error("Request timed out in DeepSeek API call for response revision")
         return {
@@ -705,28 +679,19 @@ async def generate_off_topic_response(state: dict) -> dict:
             prompt=off_topic_prompt,
         )
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "deepseek-chat",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.7,
-                },
-            )
-            data = resp.json()
-            response = data["choices"][0]["message"]["content"].strip()
+        resp = await deepseek_client.chat_completion(
+            [{"role": "user", "content": prompt}],
+            temperature=0.7,
+        )
+        data = resp.json()
+        response = data["choices"][0]["message"]["content"].strip()
 
-            # End generation AFTER LLM call
-            end_llm_generation(
-                generation=generation,
-                output_content=response,
-                usage=data.get("usage"),
-            )
+        # End generation AFTER LLM call
+        end_llm_generation(
+            generation=generation,
+            output_content=response,
+            usage=data.get("usage"),
+        )
     except Exception as e:
         logging.error(f"Error generating off-topic response: {e}")
         response = "Desculpe, sou especializado em soluções digitais. Posso ajudar com sites, automação ou IA?"

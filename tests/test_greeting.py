@@ -18,7 +18,7 @@ class TestHardcodedGreetings:
 
     async def test_returns_language_greeting_without_calling_llm(self, monkeypatch):
         # If the greeting touched the LLM, this patched client would raise.
-        monkeypatch.setattr(nodes.httpx, "AsyncClient", _no_http)
+        monkeypatch.setattr(nodes.deepseek_client, "chat_completion", _no_http)
         out = await nodes.generate_greeting_response({"language": "en"})
         assert out["response"] == nodes.GREETINGS["en"]
         assert out["revised_response"] == nodes.GREETINGS["en"]

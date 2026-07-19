@@ -148,30 +148,17 @@ class _FakeResp:
         return self._payload
 
 
-class _FakeClient:
-    def __init__(self, payload):
-        self._payload = payload
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc):
-        return False
-
-    async def post(self, *args, **kwargs):
-        return _FakeResp(self._payload)
-
-
 class TestReviseResponseWiring:
     async def test_degrades_when_api_returns_error_body_instead_of_500(self, monkeypatch):
         # An expired/invalid DeepSeek key returns JSON without "choices". revise_response
         # must fall back to the already-generated answer, not raise KeyError -> 500.
         # (Reproduces the crash the one-command demo surfaced with a bad key.)
         monkeypatch.setattr(nodes, "get_prompt", lambda *a, **k: None)
-        monkeypatch.setattr(
-            nodes.httpx, "AsyncClient",
-            lambda *a, **k: _FakeClient({"error": {"message": "Unauthorized"}}),
-        )
+
+        async def fake_cc(*a, **k):
+            return _FakeResp({"error": {"message": "Unauthorized"}})
+
+        monkeypatch.setattr(nodes.deepseek_client, "chat_completion", fake_cc)
         original = "Olá! Posso te ajudar com sites, automação e IA aqui mesmo."
         state = {"response": original, "language": "pt-BR", "langfuse_trace": None}
 

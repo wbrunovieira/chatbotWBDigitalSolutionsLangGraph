@@ -359,35 +359,26 @@ async def evaluate_response(
             logging.debug("No LLM client for evaluation - skipping")
             return None
 
-        # Call LLM for evaluation
-        import httpx
-        from config import DEEPSEEK_API_KEY
+        # Call LLM for evaluation (shared DeepSeek client; judge runs on a tighter timeout)
+        import deepseek_client
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "deepseek-chat",
-                    "messages": [{"role": "user", "content": compiled}],
-                    "temperature": 0.1,
-                },
-            )
-            data = resp.json()
-            eval_text = data["choices"][0]["message"]["content"].strip()
+        resp = await deepseek_client.chat_completion(
+            [{"role": "user", "content": compiled}],
+            temperature=0.1,
+            timeout=15.0,
+        )
+        data = resp.json()
+        eval_text = data["choices"][0]["message"]["content"].strip()
 
-            # Parse JSON response
-            scores = json.loads(eval_text)
+        # Parse JSON response
+        scores = json.loads(eval_text)
 
-            # Log scores to trace
-            for score_name, score_value in scores.items():
-                score_trace(trace, score_name, float(score_value))
+        # Log scores to trace
+        for score_name, score_value in scores.items():
+            score_trace(trace, score_name, float(score_value))
 
-            logging.info(f"Evaluation scores: {scores}")
-            return scores
+        logging.info(f"Evaluation scores: {scores}")
+        return scores
 
     except json.JSONDecodeError as e:
         logging.warning(f"Failed to parse evaluation response: {e}")
