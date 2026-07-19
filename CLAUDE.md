@@ -46,12 +46,12 @@ POST /chat → Pattern cache check → Redis cache check → LangGraph state mac
 
 The graph routes based on detected intent:
 - **greeting** → `generate_greeting_response` (hardcoded, no API call) → END
-- **off_topic** → `generate_off_topic_response` (hardcoded redirect) → END
-- **chat_with_agent / schedule_meeting** → END (handled by frontend)
-- **fast_track** (pattern-matched service questions) → `response_generation` → `response_revision` → `log_saving` → END
+- **off_topic** → `generate_off_topic_response` (LLM redirect) → END
+- **chat_with_agent** → END (handled by frontend)
 - **normal flow** → `retrieve_company_context` → `retrieve_user_context` → `augment_query` → `response_generation` → `response_revision` → `log_saving` → END
 
-State is a plain `Dict[str, Any]` passed through nodes. The `qdrant_client` instance is injected into state from `main.py`.
+State is a plain `Dict[str, Any]` passed through nodes. The Qdrant client is a process-wide
+singleton (`db.get_qdrant_client()`), not carried in state.
 
 ### Three-Tier Caching
 
