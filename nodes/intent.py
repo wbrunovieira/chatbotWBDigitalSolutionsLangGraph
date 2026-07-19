@@ -91,8 +91,8 @@ async def detect_intent(state: dict) -> dict:
                 language=language,
                 current_page=current_page,
             )
-        except:
-            # Fallback se compile falhar (variáveis não existem no prompt)
+        except Exception:
+            # Fallback if compile fails (variables missing in the prompt)
             prompt = intent_prompt.compile(user_input=user_input)
     else:
         # Hardcoded fallback if no prompt available. Asks for JSON to match the
