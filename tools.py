@@ -23,6 +23,8 @@ from typing import Any, Awaitable, Callable, Optional
 import httpx
 from pydantic import BaseModel, Field, field_validator
 
+import guardrails
+
 import config
 from cache import get_redis
 
@@ -251,7 +253,7 @@ async def dispatch(name: str, raw_args: dict) -> dict:
     try:
         args = tool.args_model(**(raw_args or {}))
     except Exception as e:  # noqa: BLE001 — hallucinated/invalid args must not crash
-        logging.warning("tool %s got invalid args %s: %s", name, raw_args, e)
+        logging.warning("tool %s got invalid args %s: %s", name, guardrails.redact_pii(str(raw_args)), e)
         return _fallback(f"invalid args: {e}")
 
     retries = tool.retries if tool.retries is not None else config.TOOL_RETRIES

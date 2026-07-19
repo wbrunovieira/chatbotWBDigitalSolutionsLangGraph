@@ -72,8 +72,10 @@ hidden:
 
 - The bot captures **only what the user volunteers**; it never solicits sensitive personal
   data (the KB's own "Security Guidelines for Chatbot Interactions" enforce this).
-- PII currently lands in `chat_logs` with no TTL and in traces — a **known gap**, tracked
-  separately (PII redaction + a retention policy are backlog items, not yet shipped).
+- PII in the stored/traced copy is now **redacted** before it hits `chat_logs` and Langfuse
+  (`guardrails.redact_pii` — email/CPF/CNPJ/phone; the live response and the CRM lead keep the
+  real data). Retention is the remaining gap: `chat_logs` has **no TTL**, so records still
+  accumulate — a scheduled delete-by-age job is tracked separately.
 - We do not intentionally send data for training; DeepSeek's own data-usage terms are the
   residual risk accepted in exchange for the cost profile.
 - If a client ever requires data residency or a no-offshore guarantee, the provider-swap path

@@ -10,6 +10,29 @@ import re
 from typing import Optional, Dict, Any, List
 from config import LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST
 from langfuse_prompts_v3 import PROMPTS_V3
+from guardrails import redact_pii
+
+
+def _redact_messages(messages):
+    """Redact PII from LLM input messages before tracing — both the text `content` and the
+    tool-call `arguments` (which carry the real lead name/phone/email create_lead sends the CRM)."""
+    out = []
+    for m in messages:
+        if not isinstance(m, dict):
+            out.append(m)
+            continue
+        m2 = dict(m)
+        if isinstance(m2.get("content"), str):
+            m2["content"] = redact_pii(m2["content"])
+        if m2.get("tool_calls"):
+            m2["tool_calls"] = [
+                {**tc, "function": {**tc["function"], "arguments": redact_pii(tc["function"]["arguments"])}}
+                if isinstance(tc, dict) and isinstance(tc.get("function", {}).get("arguments"), str)
+                else tc
+                for tc in m2["tool_calls"]
+            ]
+        out.append(m2)
+    return out
 
 # Initialize Langfuse client (lazy)
 _langfuse_client = None
@@ -174,7 +197,7 @@ def start_llm_generation(
         gen_kwargs = {
             "name": name,
             "model": model,
-            "input": input_messages,
+            "input": _redact_messages(input_messages),
             "metadata": metadata,
         }
 
@@ -207,7 +230,7 @@ def end_llm_generation(
     if not generation:
         return
     try:
-        end_kwargs = {"output": output_content}
+        end_kwargs = {"output": redact_pii(output_content) if isinstance(output_content, str) else output_content}
 
         if usage:
             end_kwargs["usage"] = {

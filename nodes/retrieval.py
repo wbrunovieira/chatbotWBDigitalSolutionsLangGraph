@@ -2,6 +2,7 @@
 
 import logging
 
+import guardrails
 import langfuse_client
 import nodes.embeddings as embeddings
 from config import (
@@ -48,7 +49,7 @@ async def retrieve_company_context(state: dict) -> dict:
     except Exception as e:
         logging.error("Error retrieving company context: %s", e)
 
-    logging.info("RAG retrieval for %r -> %s", state.get("user_input", "")[:60], sources)
+    logging.info("RAG retrieval for %r -> %s", guardrails.redact_pii(state.get("user_input", ""))[:60], sources)
     company_context = "\n\n---\n\n".join(chunks)
     if sources:
         langfuse_client.update_trace(langfuse_client.get_current_trace(), metadata={"rag_sources": sources})

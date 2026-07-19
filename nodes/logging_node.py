@@ -6,16 +6,20 @@ import uuid
 
 from qdrant_client.http.models import Distance, VectorParams
 
+import guardrails
 import nodes.embeddings as embeddings
 from db import get_qdrant_client
 
 
 async def save_log_qdrant(state: dict) -> dict:
+    # Redact PII (email/CPF/CNPJ/phone) before it is PERSISTED to chat_logs — LGPD/GDPR.
+    # The live response the user already received is untouched, and create_lead has already
+    # sent the real contact to the CRM; only this stored copy is masked.
     data_to_save = {
         "user_id": state.get("user_id"),
-        "user_input": state.get("user_input"),
-        "response": state.get("response"),
-        "revised_response": state.get("revised_response"),
+        "user_input": guardrails.redact_pii(state.get("user_input")),
+        "response": guardrails.redact_pii(state.get("response")),
+        "revised_response": guardrails.redact_pii(state.get("revised_response")),
         "intent": state.get("intent"),
         "language": state.get("language"),
         "current_page": state.get("current_page"),
