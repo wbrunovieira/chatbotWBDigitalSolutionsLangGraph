@@ -59,6 +59,15 @@ class TestRedactPii:
     def test_masks_international_phone(self):
         assert "98286" not in guardrails.redact_pii("me liga +55 11 98286-4581")
 
+    def test_masks_local_number_without_area_code(self):
+        # a cell typed without the DDD, which the full-number pattern would miss
+        for txt in ("9 8286-4581", "meu fone 8286-4581", "98286-4581"):
+            assert "8286" not in guardrails.redact_pii(txt), txt
+
+    def test_leaves_cep_alone(self):
+        # Brazilian postal code is \d5-\d3, not a phone
+        assert guardrails.redact_pii("CEP 12345-678") == "CEP 12345-678"
+
     def test_leaves_prices_dates_and_names_alone(self):
         for keep in ("orçamento de R$ 5000", "prazo de 4 a 12 semanas", "João da Padaria Central"):
             assert guardrails.redact_pii(keep) == keep
