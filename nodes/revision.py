@@ -21,18 +21,14 @@ def needs_revision(state: dict) -> bool:
     if state.get("tool_results"):
         return False
 
-    # Critérios para PULAR revisão:
-    # 1. Resposta curta e direta (menos de 1000 caracteres)
-    # 2. Não contém informações sensíveis (emails, telefones)
-    # 3. Foi gerada via fast track ou cache
-    # 4. Já está bem formatada
-
+    # Skip revision when the response is short, direct, contains no sensitive info
+    # (emails/phones), and came from the cache.
     skip_revision = (
         len(response) < 1000 and
         "@" not in response and
         not re.search(r'\+\d{1,3}[\s\-]?\(?\d{1,4}\)?[\s\-]?\d{1,4}[\s\-]?\d{1,4}', response) and  # No phone numbers
         not re.search(r'whatsapp|wpp|zap|telefone|celular|ligar', response.lower()) and
-        (state.get("fast_track", False) or state.get("cached", False))
+        state.get("cached", False)
     )
 
     return not skip_revision

@@ -208,70 +208,6 @@ def end_llm_generation(
         logging.warning(f"Failed to end Langfuse generation: {e}")
 
 
-def log_llm_generation(
-    trace,
-    name: str,
-    model: str,
-    input_messages: List[Dict[str, str]],
-    output_content: str,
-    usage: Optional[Dict[str, int]] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-    prompt=None,
-):
-    """
-    Log an LLM generation to a trace (legacy - use start/end for latency tracking).
-
-    NOTE: This logs everything at once, so latency will be ~0.
-    For accurate latency, use start_llm_generation() before LLM call
-    and end_llm_generation() after.
-    """
-    if not trace:
-        return None
-    try:
-        gen_kwargs = {
-            "name": name,
-            "model": model,
-            "input": input_messages,
-            "output": output_content,
-            "metadata": metadata,
-        }
-
-        if usage:
-            gen_kwargs["usage"] = {
-                "input": usage.get("prompt_tokens", 0),
-                "output": usage.get("completion_tokens", 0),
-                "total": usage.get("total_tokens", 0),
-            }
-
-        # Link prompt if provided and not a fallback
-        if prompt and hasattr(prompt, "is_fallback") is False:
-            gen_kwargs["prompt"] = prompt
-
-        return trace.generation(**gen_kwargs)
-    except Exception as e:
-        logging.warning(f"Failed to log Langfuse generation: {e}")
-        return None
-
-
-def log_span(
-    trace,
-    name: str,
-    input_data: Optional[Dict[str, Any]] = None,
-    output_data: Optional[Dict[str, Any]] = None,
-):
-    """Log a span (non-LLM step) to a trace."""
-    if not trace:
-        return None
-    try:
-        span = trace.span(name=name, input=input_data)
-        if output_data:
-            span.end(output=output_data)
-        return span
-    except Exception as e:
-        logging.warning(f"Failed to log Langfuse span: {e}")
-        return None
-
-
 def update_trace(
     trace,
     output: Optional[Dict[str, Any]] = None,
@@ -299,22 +235,6 @@ def score_trace(
         trace.score(name=name, value=value, comment=comment)
     except Exception as e:
         logging.warning(f"Failed to score Langfuse trace: {e}")
-
-
-def score_trace_by_id(
-    trace_id: str,
-    name: str,
-    value: float,
-    comment: Optional[str] = None,
-):
-    """Add a score to a trace by ID (for async evaluation)."""
-    client = get_langfuse()
-    if not client:
-        return
-    try:
-        client.score(trace_id=trace_id, name=name, value=float(value), comment=comment)
-    except Exception as e:
-        logging.warning(f"Failed to score Langfuse trace by ID: {e}")
 
 
 async def evaluate_response(

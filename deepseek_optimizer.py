@@ -102,17 +102,6 @@ class DeepSeekOptimizer:
         return brazil_time.strftime("%H:%M:%S")
     
     @staticmethod
-    def should_use_aggressive_cache() -> bool:
-        """
-        Determina se deve usar cache agressivo baseado no horário
-        
-        Returns:
-            bool: True se deve priorizar cache (fora do desconto)
-        """
-        # Use cache agressivo FORA do horário de desconto
-        return not DeepSeekOptimizer.is_discount_time()
-    
-    @staticmethod
     def get_current_pricing() -> Dict[str, float]:
         """
         Retorna preços atuais baseado no horário
@@ -279,48 +268,3 @@ class DeepSeekOptimizer:
         return headers
 
 
-# Função auxiliar para decisão de cache
-def should_skip_api_call(user_input: str, intent: str = None) -> bool:
-    """
-    Decide se deve pular chamada à API baseado em otimizações
-    
-    Args:
-        user_input: Entrada do usuário
-        intent: Intenção detectada (opcional)
-        
-    Returns:
-        bool: True se deve usar apenas cache local
-    """
-    # Se está fora do horário de desconto, ser mais agressivo com cache
-    if DeepSeekOptimizer.should_use_aggressive_cache():
-        # Lista expandida de palavras que indicam perguntas simples
-        simple_patterns = [
-            "oi", "olá", "hello", "hi", "bom dia", "boa tarde", "boa noite",
-            "quanto custa", "preço", "valor", "orçamento",
-            "serviços", "o que fazem", "como funciona",
-            "contato", "telefone", "whatsapp", "email",
-            "prazo", "quanto tempo", "demora",
-            "localização", "onde fica", "endereço"
-        ]
-        
-        lower_input = user_input.lower()
-        if any(pattern in lower_input for pattern in simple_patterns):
-            logging.info("🚫 Pulando API - Cache agressivo ativo (fora do desconto)")
-            return True
-    
-    return False
-
-
-# Função para estimar tokens (aproximação)
-def estimate_tokens(text: str) -> int:
-    """
-    Estima número de tokens em um texto
-    Aproximação: ~4 caracteres por token para português
-    
-    Args:
-        text: Texto para estimar
-        
-    Returns:
-        int: Número estimado de tokens
-    """
-    return len(text) // 4
