@@ -75,3 +75,26 @@ class TestRedactPii:
     def test_none_and_empty_are_safe(self):
         assert guardrails.redact_pii(None) is None
         assert guardrails.redact_pii("") == ""
+
+
+class TestLangfuseChildObservationRedaction:
+    def test_redacts_message_content_and_tool_call_arguments(self):
+        import langfuse_client
+
+        msgs = [
+            {"role": "system", "content": "you are an assistant"},
+            {"role": "user", "content": "meu email é joao@x.com, fone (11) 98286-4581"},
+            {"role": "assistant", "content": None, "tool_calls": [
+                {"id": "1", "function": {"name": "create_lead",
+                 "arguments": '{"contact_email": "a@b.com", "contact_whatsapp": "11982864581"}'}}
+            ]},
+        ]
+        out = langfuse_client._redact_messages(msgs)
+
+        assert "joao@x.com" not in out[1]["content"]
+        assert "98286-4581" not in out[1]["content"]
+        args = out[2]["tool_calls"][0]["function"]["arguments"]
+        assert "a@b.com" not in args
+        assert "11982864581" not in args
+        # the original messages must not be mutated (redaction is only for the traced copy)
+        assert msgs[1]["content"] == "meu email é joao@x.com, fone (11) 98286-4581"
