@@ -11,6 +11,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
+import db
 import main
 import security
 from deepseek_optimizer import add_request_cost
@@ -83,7 +84,7 @@ def graph_calls(monkeypatch):
 @pytest_asyncio.fixture
 async def client(monkeypatch, redis_fake, limits, graph_calls):
     """Async client with every external dependency stubbed: no network, no spend."""
-    monkeypatch.setattr(main, "QdrantClient", lambda **kwargs: FakeQdrant())
+    db.set_qdrant_client(FakeQdrant())  # nodes read the client from the db singleton
     monkeypatch.setattr(main, "create_trace", lambda **kwargs: None)
     monkeypatch.setattr(main, "update_trace", lambda *args, **kwargs: None)
 
@@ -95,6 +96,7 @@ async def client(monkeypatch, redis_fake, limits, graph_calls):
     transport = ASGITransport(app=main.app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as c:
         yield c
+    db.set_qdrant_client(None)
 
 
 async def post(client, payload=None, ip="203.0.113.10", origin=ALLOWED_ORIGIN):
