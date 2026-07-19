@@ -217,8 +217,10 @@ async def _handle_chat(payload: ChatRequest):
     # Log dos dados recebidos para debug
     logging.info(f"Request received - User: {user_id}, Language: {language}, Page: {current_page}")
 
-    # VERIFICAÇÃO: Cache Redis para mensagens exatas (mantido para performance)
-    cache_data = f"{user_input}_{language}_{current_page}"
+    # Exact-match Redis cache. The key includes user_id so one visitor's answer is never
+    # served to another (responses are conversation-dependent now that memory exists), and
+    # we only WRITE the cache for context-free turns (see below).
+    cache_data = f"{user_input}_{language}_{current_page}_{user_id}"
     cache_key = sha256(cache_data.encode('utf-8')).hexdigest()
 
     cached_result = await get_cached_response(cache_key)
@@ -323,7 +325,11 @@ async def _handle_chat(payload: ChatRequest):
         except Exception as e:
             logging.warning(f"Evaluation failed: {e}")
 
-    await set_cached_response(cache_key, response_data)
+    # Only cache CONTEXT-FREE turns. Once a conversation has history (messages accumulates
+    # 2 entries per turn), the answer depends on that history, so caching it by message would
+    # serve a stale, context-free answer on the next hit. A first turn has <= 2 messages.
+    if len(result.get("messages", [])) <= 2:
+        await set_cached_response(cache_key, response_data)
 
     return response_data
 

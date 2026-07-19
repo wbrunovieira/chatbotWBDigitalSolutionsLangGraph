@@ -62,6 +62,12 @@ in-process saver can't.
 
 **Negative / limits**
 - Tier 1 memory is lost on restart/deploy (in-process). Documented; Redis is the upgrade path.
+- `MemorySaver` is an **unbounded in-process store** — it retains every `thread_id`'s
+  checkpoints for the process lifetime and never evicts, so the restart/deploy that loses
+  memory is also its only garbage collection. At single-worker scale with regular deploys
+  this is acceptable (each thread is itself capped at `MAX_HISTORY_MESSAGES`), but a
+  long-uptime worker with many distinct users would grow unbounded → a periodic thread
+  sweep (or the Redis checkpointer with TTLs) is the fix when it matters.
 - Tier 2 recall quality is capped by the `chat_logs` embedding (a combined user+response+intent
   blob) and the English-centric embedder — decent, not great. A dedicated turn-level embedding
   would improve it.

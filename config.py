@@ -73,7 +73,9 @@ COMPANY_SCORE_THRESHOLD = float(os.getenv("COMPANY_SCORE_THRESHOLD", "0.2"))
 # Short-term conversation memory: how many recent messages (user+assistant turns) to keep
 # in the checkpointed history and replay to the model. 10 = the last ~5 turns; caps the
 # context window and cost as a conversation grows.
-MAX_HISTORY_MESSAGES = int(os.getenv("MAX_HISTORY_MESSAGES", "10"))
+# Rounded down to an even number so the [-N:] slice never orphans a user message from its
+# assistant reply (history grows in user/assistant pairs).
+MAX_HISTORY_MESSAGES = (int(os.getenv("MAX_HISTORY_MESSAGES", "10")) // 2) * 2
 
 # Long-term memory: semantic recall of this user's most relevant PAST exchanges from
 # chat_logs (across sessions). Top-k above a score floor.
