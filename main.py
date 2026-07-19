@@ -308,6 +308,10 @@ def _maybe_schedule_judge(langfuse_trace, user_input: str, response: str, result
     Keeps the second LLM call off the request path (the visitor never waits on it). No-op
     when Langfuse is disabled (no trace) or for hardcoded greetings, which have no generated
     answer worth scoring.
+
+    Note: because this runs after the request's spend is recorded, the judge's own token
+    cost is not billed against the daily/per-IP cap. Moot while Langfuse is disabled (trace
+    is None → no-op); revisit the spend accounting if the judge is ever turned on.
     """
     if not langfuse_trace or result.get("intent") == "greeting":
         return
