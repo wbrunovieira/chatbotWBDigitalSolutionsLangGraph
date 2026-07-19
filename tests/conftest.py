@@ -18,6 +18,27 @@ os.environ.setdefault("ADMIN_API_TOKEN", "test-admin-token")
 
 import cache  # noqa: E402
 import config  # noqa: E402
+import db  # noqa: E402
+
+
+class _UnstubbedQdrant:
+    """Any attribute use raises — so a test that reaches Qdrant without stubbing fails loudly."""
+
+    def __getattr__(self, name):
+        raise AssertionError(
+            f"Qdrant client not stubbed in this test (called .{name}). "
+            "Set db.set_qdrant_client(fake) — the suite must never reach a real Qdrant."
+        )
+
+
+@pytest.fixture(autouse=True)
+def guard_qdrant_singleton():
+    # Nodes fetch the client from db.get_qdrant_client(); default it to a guard so a missing
+    # stub errors instead of silently dialing http://localhost:6333. Tests that need Qdrant
+    # override this with db.set_qdrant_client(fake).
+    db.set_qdrant_client(_UnstubbedQdrant())
+    yield
+    db.set_qdrant_client(None)
 
 
 @pytest.fixture

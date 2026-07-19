@@ -2,6 +2,7 @@
 
 import pytest
 
+import db
 import nodes
 
 
@@ -38,7 +39,8 @@ class TestRetrieveCompanyContext:
             FakePoint({"text": "Websites chunk", "section": "Services > Websites"}, 0.82),
             FakePoint({"text": "Automation chunk", "section": "Services > Automation"}, 0.55),
         ])
-        state = {"user_input": "vocês fazem sites?", "qdrant_client": client, "langfuse_trace": object()}
+        db.set_qdrant_client(client)
+        state = {"user_input": "vocês fazem sites?", "langfuse_trace": object()}
 
         out = await nodes.retrieve_company_context(state)
 
@@ -53,20 +55,23 @@ class TestRetrieveCompanyContext:
     async def test_legacy_single_doc_payload_still_works(self):
         # Before the first chunked ingest, points carry the old "company_info" key.
         client = FakeQdrant(results=[FakePoint({"company_info": "Legacy whole doc"}, 0.9)])
-        state = {"user_input": "oi", "qdrant_client": client, "langfuse_trace": None}
+        db.set_qdrant_client(client)
+        state = {"user_input": "oi", "langfuse_trace": None}
         out = await nodes.retrieve_company_context(state)
         assert out["company_context"] == "Legacy whole doc"
 
     async def test_no_hits_yields_empty_context_and_no_sources(self):
         client = FakeQdrant(results=[])
-        state = {"user_input": "capital da França", "qdrant_client": client, "langfuse_trace": None}
+        db.set_qdrant_client(client)
+        state = {"user_input": "capital da França", "langfuse_trace": None}
         out = await nodes.retrieve_company_context(state)
         assert out["company_context"] == ""
         assert out["rag_sources"] == []
 
     async def test_search_error_degrades_gracefully(self):
         client = FakeQdrant(raise_on_search=True)
-        state = {"user_input": "oi", "qdrant_client": client, "langfuse_trace": None}
+        db.set_qdrant_client(client)
+        state = {"user_input": "oi", "langfuse_trace": None}
         out = await nodes.retrieve_company_context(state)
         assert out["company_context"] == ""
         assert out["step"] == "retrieve_company_context"
@@ -96,10 +101,11 @@ class TestSaveLogRetry:
         # If startup skipped collection creation (Qdrant was down at boot), the write path
         # must self-heal: create chat_logs and retry, not silently drop conversation memory.
         client = FlakyLogClient()
+        db.set_qdrant_client(client)
         state = {
             "user_id": "u1", "user_input": "oi", "response": "olá",
             "revised_response": "olá!", "intent": "greeting", "language": "pt-BR",
-            "current_page": "/", "tool_results": [], "qdrant_client": client,
+            "current_page": "/", "tool_results": [],
         }
         await nodes.save_log_qdrant(state)
         assert client.created is True     # collection ensured

@@ -5,7 +5,6 @@ import re
 import time
 import uuid
 import logging
-from qdrant_client import QdrantClient
 from qdrant_client.http.models import VectorParams, Distance
 from config import DEEPSEEK_API_KEY, COMPANY_TOP_K, COMPANY_SCORE_THRESHOLD
 from fastembed import TextEmbedding
@@ -14,6 +13,7 @@ from deepseek_optimizer import DeepSeekOptimizer, estimate_tokens, should_skip_a
 from langfuse_client import start_llm_generation, end_llm_generation, get_prompt, evaluate_response, score_trace, update_trace
 import tools
 import guardrails
+from db import get_qdrant_client
 
 
 # FastEmbed - lightweight ONNX-based embeddings (no PyTorch required).
@@ -233,7 +233,7 @@ async def retrieve_company_context(state: dict) -> dict:
     embedding = compute_embedding(state["user_input"])
     chunks, sources = [], []
     try:
-        results = state["qdrant_client"].search(
+        results = get_qdrant_client().search(
             collection_name="company_info",
             query_vector=embedding,
             limit=COMPANY_TOP_K,
@@ -270,7 +270,7 @@ async def retrieve_user_context(state: dict) -> dict:
 
     dummy_vector = [0.0] * 384
     try:
-        results = state["qdrant_client"].search(
+        results = get_qdrant_client().search(
             collection_name="chat_logs",
             query_vector=dummy_vector,
             limit=5,
@@ -647,7 +647,7 @@ async def save_log_qdrant(state: dict) -> dict:
         "vector": log_embedding,
         "payload": data_to_save,
     }
-    client = state["qdrant_client"]
+    client = get_qdrant_client()
     try:
         client.upsert(collection_name="chat_logs", points=[point])
         logging.info("Log saved to Qdrant successfully.")

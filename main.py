@@ -5,7 +5,6 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from qdrant_client import QdrantClient
 from qdrant_client.http.models import VectorParams, Distance
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -13,8 +12,8 @@ from graph_config import graph
 import logging
 from dotenv import load_dotenv
 import config
-from config import QDRANT_HOST, QDRANT_API_KEY
 import ingest
+from db import get_qdrant_client
 from cache import get_cached_response, set_cached_response
 from hashlib import sha256
 import time
@@ -51,7 +50,7 @@ async def lifespan(app: FastAPI):
     a request no longer re-checks/creates collections on every call. Shutdown: flush Langfuse.
     """
     try:
-        client = QdrantClient(url=QDRANT_HOST, api_key=QDRANT_API_KEY)
+        client = get_qdrant_client()
         # Centralized collection init. collection_exists() returns a bool, so we create only
         # on a genuine miss — auth/network errors raise and are caught below (degrade, don't
         # crash-loop) rather than being mistaken for "missing" and triggering a blind create.
@@ -214,14 +213,6 @@ async def _handle_chat(payload: ChatRequest):
 
 
 
-    # Collections + KB ingest happen once at startup (see the lifespan handler), not per
-    # request. This client is still created here and injected into the graph state for
-    # retrieval and log persistence.
-    qdrant = QdrantClient(
-        url=QDRANT_HOST,
-        api_key=QDRANT_API_KEY,
-    )
-
     # Criar contexto enriquecido com base na página
     page_context = ""
     if current_page == "/websites":
@@ -260,7 +251,6 @@ async def _handle_chat(payload: ChatRequest):
             "language": language,
             "current_page": current_page
         },
-        "qdrant_client": qdrant,
         "langfuse_trace": langfuse_trace,
     }
 
