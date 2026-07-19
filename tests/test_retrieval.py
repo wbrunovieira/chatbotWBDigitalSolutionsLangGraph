@@ -6,13 +6,6 @@ import db
 import nodes
 
 
-@pytest.fixture(autouse=True)
-def reset_qdrant_singleton():
-    # Nodes fetch the Qdrant client from the db singleton, not from state; reset between tests.
-    yield
-    db.set_qdrant_client(None)
-
-
 class FakePoint:
     def __init__(self, payload, score):
         self.payload = payload

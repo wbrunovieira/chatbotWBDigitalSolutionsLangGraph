@@ -5,7 +5,6 @@ import re
 import time
 import uuid
 import logging
-from qdrant_client import QdrantClient
 from qdrant_client.http.models import VectorParams, Distance
 from config import DEEPSEEK_API_KEY, COMPANY_TOP_K, COMPANY_SCORE_THRESHOLD
 from fastembed import TextEmbedding

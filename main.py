@@ -12,7 +12,6 @@ from graph_config import graph
 import logging
 from dotenv import load_dotenv
 import config
-from config import QDRANT_HOST, QDRANT_API_KEY
 import ingest
 from db import get_qdrant_client
 from cache import get_cached_response, set_cached_response
