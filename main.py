@@ -207,128 +207,118 @@ async def chat(payload: ChatRequest, client_ip: str = Depends(enforce_chat_limit
         await record_spend(client_ip, get_request_cost())
 
 
-async def _handle_chat(payload: ChatRequest):
-    user_input = payload.message
-    user_id = payload.user_id
-    language = payload.language
-    current_page = payload.current_page
-    page_url = payload.page_url
-    timestamp = payload.timestamp
-
-    # Log dos dados recebidos para debug
-    logging.info(f"Request received - User: {user_id}, Language: {language}, Page: {current_page}")
-
-    # Exact-match Redis cache. The key includes user_id so one visitor's answer is never
-    # served to another (responses are conversation-dependent now that memory exists), and
-    # we only WRITE the cache for context-free turns (see below).
-    cache_data = f"{user_input}_{language}_{current_page}_{user_id}"
-    cache_key = sha256(cache_data.encode('utf-8')).hexdigest()
-
-    cached_result = await get_cached_response(cache_key)
-    if cached_result:
-        return {**cached_result, "cached": True, "cache_type": "redis"}
+# Page -> a short pt-BR context hint fed to the prompts. Data, not branching code.
+PAGE_CONTEXTS = {
+    "/websites": "O usuário está vendo a página de serviços de desenvolvimento web",
+    "/automation": "O usuário está interessado em automação de processos",
+    "/ai": "O usuário está explorando soluções de IA e Machine Learning",
+    "/contact": "O usuário está na página de contato",
+}
 
 
+def _page_context(current_page: str) -> str:
+    if current_page in PAGE_CONTEXTS:
+        return PAGE_CONTEXTS[current_page]
+    if current_page.startswith("/blog"):
+        return "O usuário está lendo o blog"
+    return "O usuário está na página inicial"
 
-    # Criar contexto enriquecido com base na página
-    page_context = ""
-    if current_page == "/websites":
-        page_context = "O usuário está vendo a página de serviços de desenvolvimento web"
-    elif current_page == "/automation":
-        page_context = "O usuário está interessado em automação de processos"
-    elif current_page == "/ai":
-        page_context = "O usuário está explorando soluções de IA e Machine Learning"
-    elif current_page == "/contact":
-        page_context = "O usuário está na página de contato"
-    elif current_page.startswith("/blog"):
-        page_context = "O usuário está lendo o blog"
-    else:
-        page_context = "O usuário está na página inicial"
 
-    # Create Langfuse trace for this chat interaction
-    langfuse_trace = create_trace(
-        name="chatbot-interaction",
-        user_id=user_id,
-        session_id=user_id,
-        input_data={"message": guardrails.redact_pii(user_input), "language": language, "current_page": current_page},
-        metadata={"page_url": page_url, "page_context": page_context},
-    )
-    # Carry the trace in a ContextVar, not in the graph state — a live trace object isn't
-    # serializable, and the checkpointer serializes the state to persist memory.
-    set_current_trace(langfuse_trace)
-
-    state = {
-        "user_input": user_input,
-        "user_id": user_id,
-        "language": language,
-        "current_page": current_page,
+def _build_state(payload: ChatRequest, page_context: str) -> dict:
+    # No "messages" on purpose — the checkpointer holds the accumulated conversation history
+    # per thread_id; passing [] would clobber it each turn.
+    return {
+        "user_input": payload.message,
+        "user_id": payload.user_id,
+        "language": payload.language,
+        "current_page": payload.current_page,
         "page_context": page_context,
-        # NOTE: no "messages" here on purpose — the checkpointer holds the accumulated
-        # conversation history per thread_id; passing [] would clobber it each turn.
         "memory": {},
         "metadata": {
-            "page_url": page_url,
-            "timestamp": timestamp,
-            "language": language,
-            "current_page": current_page
+            "page_url": payload.page_url,
+            "timestamp": payload.timestamp,
+            "language": payload.language,
+            "current_page": payload.current_page,
         },
     }
 
-    result = await graph.ainvoke(state, config={"configurable": {"thread_id": _memory_thread_id(user_id)}})
 
-
-    # Estruturar resposta para permitir exibição natural no frontend
-    # Dividir resposta em partes se for muito longa
+def _shape_response(result: dict, language: str, current_page: str) -> dict:
+    """The fixed response shape the widget reads. Greetings split into bubbles; other
+    answers split on blank lines."""
     full_response = result.get("revised_response", result.get("response", ""))
-    
-    # Para saudações simples, enviar resposta estruturada
-    response_parts = []
     if result.get("intent") == "greeting":
         response_parts = split_greeting_bubbles(full_response)
     else:
-        # Para outras respostas, dividir em parágrafos ou frases
-        # Preservar quebras de linha e estrutura
-        paragraphs = full_response.split("\n\n")
-        for para in paragraphs:
-            if para.strip():
-                response_parts.append(para.strip())
-    
-    response_data = {
+        response_parts = [p.strip() for p in full_response.split("\n\n") if p.strip()]
+    return {
         "raw_response": result.get("response"),
         "revised_response": full_response,
-        "response_parts": response_parts,  # Array de partes da mensagem
+        "response_parts": response_parts,
         "detected_intent": result.get("intent"),
         "final_step": result.get("step"),
         "language_used": language,
         "context_page": current_page,
         "is_greeting": result.get("intent") == "greeting",
-        "cached": False
+        "cached": False,
     }
 
-    # Update Langfuse trace with final output
+
+async def _handle_chat(payload: ChatRequest):
+    user_id = payload.user_id
+    language = payload.language
+    current_page = payload.current_page
+    logging.info(f"Request received - User: {user_id}, Language: {language}, Page: {current_page}")
+
+    # Exact-match Redis cache. The key includes user_id so one visitor's answer is never
+    # served to another (responses are conversation-dependent now that memory exists); we
+    # only WRITE the cache for context-free turns (below).
+    cache_key = sha256(f"{payload.message}_{language}_{current_page}_{user_id}".encode("utf-8")).hexdigest()
+    cached_result = await get_cached_response(cache_key)
+    if cached_result:
+        return {**cached_result, "cached": True, "cache_type": "redis"}
+
+    page_context = _page_context(current_page)
+    langfuse_trace = create_trace(
+        name="chatbot-interaction",
+        user_id=user_id,
+        session_id=user_id,
+        input_data={"message": guardrails.redact_pii(payload.message), "language": language, "current_page": current_page},
+        metadata={"page_url": payload.page_url, "page_context": page_context},
+    )
+    # Carry the trace in a ContextVar, not the graph state (a live trace isn't serializable,
+    # and the checkpointer serializes the state).
+    set_current_trace(langfuse_trace)
+
+    result = await graph.ainvoke(
+        _build_state(payload, page_context),
+        config={"configurable": {"thread_id": _memory_thread_id(user_id)}},
+    )
+
+    response_data = _shape_response(result, language, current_page)
+    full_response = response_data["revised_response"]
+
     update_trace(
         langfuse_trace,
         output={"response": guardrails.redact_pii(full_response), "intent": result.get("intent")},
         metadata={"final_step": result.get("step"), "cached": False},
     )
 
-    # Run evaluation asynchronously (non-blocking)
-    # Only evaluate non-cached responses that went through LLM
+    # Evaluate non-cached, LLM-driven responses (non-blocking best-effort).
     if langfuse_trace and result.get("step") not in ["cached_response", "revision_skipped"]:
         try:
             await evaluate_response(
                 trace=langfuse_trace,
-                user_input=user_input,
+                user_input=payload.message,
                 response=full_response,
                 intent=result.get("intent", "unknown"),
-                llm_client=True,  # Enable LLM evaluation
+                llm_client=True,
             )
         except Exception as e:
             logging.warning(f"Evaluation failed: {e}")
 
-    # Only cache CONTEXT-FREE turns. Once a conversation has history (messages accumulates
-    # 2 entries per turn), the answer depends on that history, so caching it by message would
-    # serve a stale, context-free answer on the next hit. A first turn has <= 2 messages.
+    # Only cache CONTEXT-FREE turns: once a conversation has history (messages grows 2/turn),
+    # the answer depends on it, so caching by message would serve a stale answer. First turn <= 2.
     if len(result.get("messages", [])) <= 2:
         await set_cached_response(cache_key, response_data)
 
