@@ -144,6 +144,7 @@ class _FakeResp:
     def __init__(self, payload):
         self._payload = payload
         self.headers = {}
+        self.text = str(payload)
 
     def json(self):
         return self._payload
@@ -167,3 +168,36 @@ class TestReviseResponseWiring:
 
         assert result["step"] == "revise_response_skipped"
         assert result["revised_response"] == original
+
+    async def test_degrades_on_non_json_gateway_body(self, monkeypatch):
+        # A 502 gateway returns HTML, not JSON -> response.json() raises. Must fall back to
+        # the original answer, not 500 (the json() parse used to be outside the guard).
+        monkeypatch.setattr(langfuse_client, "get_prompt", lambda *a, **k: None)
+
+        class _Html:
+            text = "<html>502 Bad Gateway</html>"
+            headers = {}
+
+            def json(self):
+                raise ValueError("no json")
+
+        async def fake_cc(*a, **k):
+            return _Html()
+
+        monkeypatch.setattr(nodes.deepseek_client, "chat_completion", fake_cc)
+        result = await nodes.revise_response({"response": "resposta original", "language": "pt-BR"})
+        assert result["step"] == "revise_response_skipped"
+        assert result["revised_response"] == "resposta original"
+
+    async def test_timeout_keeps_original_not_an_english_error(self, monkeypatch):
+        import httpx as _httpx
+
+        monkeypatch.setattr(langfuse_client, "get_prompt", lambda *a, **k: None)
+
+        async def boom(*a, **k):
+            raise _httpx.ReadTimeout("slow")
+
+        monkeypatch.setattr(nodes.deepseek_client, "chat_completion", boom)
+        result = await nodes.revise_response({"response": "resposta original", "language": "pt-BR"})
+        assert result["revised_response"] == "resposta original"   # not an English error string
+        assert result["step"] == "revise_response_skipped"

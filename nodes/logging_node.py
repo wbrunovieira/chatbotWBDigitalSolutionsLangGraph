@@ -25,7 +25,7 @@ async def save_log_qdrant(state: dict) -> dict:
         "current_page": state.get("current_page"),
         # Audit trail: which tools fired this turn (name + ok), so the chatbot side has a
         # record a lead/booking was created, not only the CRM.
-        "tools_used": [{"tool": t.get("tool"), "ok": t.get("result", {}).get("ok")} for t in state.get("tool_results", [])],
+        "tools_used": [{"tool": t.get("tool"), "ok": t.get("result", {}).get("ok")} for t in (state.get("tool_results") or [])],
         "timestamp": int(time.time()),
     }
     logging.info("Saving to Qdrant: %s", data_to_save)
