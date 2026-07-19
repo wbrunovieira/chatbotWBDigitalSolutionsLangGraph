@@ -150,6 +150,13 @@ class _FakeResp:
         return self._payload
 
 
+# Long enough to trip needs_revision (len > config.REVISION_MAX_LENGTH), so these tests
+# exercise the revision LLM path and its failure fallbacks rather than the short-answer skip.
+LONG_RESPONSE = "Olá! " + (
+    "Podemos desenvolver sites, automações e soluções de IA sob medida para o seu negócio. " * 8
+)
+
+
 class TestReviseResponseWiring:
     async def test_degrades_when_api_returns_error_body_instead_of_500(self, monkeypatch):
         # An expired/invalid DeepSeek key returns JSON without "choices". revise_response
@@ -161,7 +168,7 @@ class TestReviseResponseWiring:
             return _FakeResp({"error": {"message": "Unauthorized"}})
 
         monkeypatch.setattr(nodes.deepseek_client, "chat_completion", fake_cc)
-        original = "Olá! Posso te ajudar com sites, automação e IA aqui mesmo."
+        original = LONG_RESPONSE
         state = {"response": original, "language": "pt-BR", "langfuse_trace": None}
 
         result = await nodes.revise_response(state)
@@ -185,9 +192,9 @@ class TestReviseResponseWiring:
             return _Html()
 
         monkeypatch.setattr(nodes.deepseek_client, "chat_completion", fake_cc)
-        result = await nodes.revise_response({"response": "resposta original", "language": "pt-BR"})
+        result = await nodes.revise_response({"response": LONG_RESPONSE, "language": "pt-BR"})
         assert result["step"] == "revise_response_skipped"
-        assert result["revised_response"] == "resposta original"
+        assert result["revised_response"] == LONG_RESPONSE
 
     async def test_timeout_keeps_original_not_an_english_error(self, monkeypatch):
         import httpx as _httpx
@@ -198,6 +205,6 @@ class TestReviseResponseWiring:
             raise _httpx.ReadTimeout("slow")
 
         monkeypatch.setattr(nodes.deepseek_client, "chat_completion", boom)
-        result = await nodes.revise_response({"response": "resposta original", "language": "pt-BR"})
-        assert result["revised_response"] == "resposta original"   # not an English error string
+        result = await nodes.revise_response({"response": LONG_RESPONSE, "language": "pt-BR"})
+        assert result["revised_response"] == LONG_RESPONSE   # not an English error string
         assert result["step"] == "revise_response_skipped"

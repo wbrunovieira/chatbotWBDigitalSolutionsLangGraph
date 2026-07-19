@@ -87,6 +87,13 @@ SHARED_USER_IDS = {"anon", "experiment", "", None}
 # LGPD retention: delete chat_logs points older than this many days (run by retention.py).
 CHAT_LOGS_RETENTION_DAYS = int(os.getenv("CHAT_LOGS_RETENTION_DAYS", "90"))
 
+# Answer quality (see nodes.revision / main._maybe_schedule_judge). Kept OFF the hot path:
+# revision is a second LLM round-trip, so only long answers that need trimming toward the
+# ~500-char target are revised; short, direct replies are returned as generated. The judge
+# is sampled and scored in a background task, never blocking the visitor's response.
+REVISION_MAX_LENGTH = int(os.getenv("REVISION_MAX_LENGTH", "600"))
+JUDGE_SAMPLE_RATE = float(os.getenv("JUDGE_SAMPLE_RATE", "0.1"))
+
 # schedule_meeting hands the user this direct booking link.
 BOOKING_URL = os.getenv("BOOKING_URL", "https://agenda.wbdigitalsolutions.com/book")
 

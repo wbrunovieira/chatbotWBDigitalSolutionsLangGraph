@@ -2,36 +2,27 @@
 
 import httpx
 import logging
-import re
 
+import config
 import deepseek_client
 import langfuse_client
 from deepseek_optimizer import DeepSeekOptimizer
 
 
 def needs_revision(state: dict) -> bool:
-    """
-    Determina se a resposta precisa de revisão.
-    Pula revisão para respostas já otimizadas.
-    """
-    response = state.get("response", "")
+    """Whether to spend a second LLM call polishing the answer.
 
-    # Tool-driven replies (lead confirmation, booking link) are already curated — a
-    # 500-char rewrite could mangle them or drop the booking URL, so never revise them.
+    Revision is a second DeepSeek round-trip, so it stays off the hot path: it only helps
+    long answers that need trimming toward the ~500-char target, so we gate on length.
+    Short, direct replies are already fine and are returned as generated. Tool-driven
+    replies (booking link, lead confirmation) are curated and must never be rewritten —
+    a rewrite could mangle them or drop the booking URL.
+    """
     if state.get("tool_results"):
         return False
 
-    # Skip revision when the response is short, direct, contains no sensitive info
-    # (emails/phones), and came from the cache.
-    skip_revision = (
-        len(response) < 1000 and
-        "@" not in response and
-        not re.search(r'\+\d{1,3}[\s\-]?\(?\d{1,4}\)?[\s\-]?\d{1,4}[\s\-]?\d{1,4}', response) and  # No phone numbers
-        not re.search(r'whatsapp|wpp|zap|telefone|celular|ligar', response.lower()) and
-        state.get("cached", False)
-    )
-
-    return not skip_revision
+    response = state.get("response", "") or ""
+    return len(response) > config.REVISION_MAX_LENGTH
 
 
 def _keep_original(state: dict) -> dict:
