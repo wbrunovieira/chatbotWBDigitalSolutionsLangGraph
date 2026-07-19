@@ -247,3 +247,27 @@ class TestSpendCap:
         other = await post(client, {**VALID_PAYLOAD, "user_id": "user-B"})
         assert other.json()["cached"] is False
         assert len(graph_calls) == 2, "a different user must not get another user's cached answer"
+
+
+class TestHandleChatHelpers:
+    def test_page_context_maps_known_pages_blog_and_default(self):
+        assert "automação" in main._page_context("/automation")
+        assert "web" in main._page_context("/websites")
+        assert main._page_context("/blog/post-x") == "O usuário está lendo o blog"
+        assert main._page_context("/qualquer-outra") == "O usuário está na página inicial"
+
+    def test_shape_response_splits_greeting_into_bubbles(self):
+        greeting = main._shape_response(
+            {"revised_response": "Olá 👋! Tudo bem? Como ajudo?", "intent": "greeting", "step": "x"},
+            "pt-BR", "/",
+        )
+        assert greeting["is_greeting"] is True
+        assert len(greeting["response_parts"]) >= 2
+
+    def test_shape_response_splits_non_greeting_on_blank_lines(self):
+        out = main._shape_response(
+            {"revised_response": "Parágrafo um.\n\nParágrafo dois.", "intent": "inquire_services", "step": "x"},
+            "pt-BR", "/",
+        )
+        assert out["is_greeting"] is False
+        assert out["response_parts"] == ["Parágrafo um.", "Parágrafo dois."]
