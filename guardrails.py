@@ -74,3 +74,28 @@ def scrub_output(text: str, language: str = "pt-BR") -> str:
         logging.warning("output guardrail: canary leak blocked")
         return _REFUSAL.get(language, _REFUSAL["pt-BR"])
     return text
+
+
+# ============================================================
+# PII redaction (LGPD/GDPR) — mask personal data before it is PERSISTED (chat_logs) or
+# TRACED (Langfuse). This never touches the response returned to the user, nor the tool
+# arguments — create_lead still sends the real contact to the CRM; only the stored/traced
+# COPY is redacted. Name redaction is out of scope (needs NER; the lead volunteers it).
+# ============================================================
+_PII_EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+_PII_CNPJ = re.compile(r"\b\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}\b")   # Brazilian company id (14)
+_PII_CPF = re.compile(r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b")           # Brazilian person id (11)
+_PII_PHONE = re.compile(r"(?:\+?\d{1,3}[\s.\-]?)?\(?\d{2,3}\)?[\s.\-]?\d{4,5}[\s.\-]?\d{4}")
+
+
+def redact_pii(text: str) -> str:
+    """Mask emails, CPF/CNPJ documents, and phone numbers. Order matters: documents (with
+    their dot/slash patterns) before the greedier phone pattern. Prices/dates/short numbers
+    (< 8 digits) are left alone."""
+    if not text:
+        return text
+    text = _PII_EMAIL.sub("[email redacted]", text)
+    text = _PII_CNPJ.sub("[document redacted]", text)
+    text = _PII_CPF.sub("[document redacted]", text)
+    text = _PII_PHONE.sub("[phone redacted]", text)
+    return text

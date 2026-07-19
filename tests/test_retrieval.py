@@ -143,3 +143,28 @@ class TestRetrieveUserContext:
         out = await nodes.retrieve_user_context({"user_input": "oi", "user_id": "u-42"})
         assert out["user_context"] == ""
         assert out["step"] == "retrieve_user_context"
+
+
+class TestSaveLogRedactsPii:
+    async def test_pii_is_redacted_before_persisting_to_chat_logs(self):
+        captured = {}
+
+        class CapturingClient:
+            def upsert(self, collection_name, points):
+                captured["payload"] = points[0]["payload"]
+
+        db.set_qdrant_client(CapturingClient())
+        state = {
+            "user_id": "u-1",
+            "user_input": "meu email é joao@x.com e meu fone é (11) 98286-4581",
+            "response": "Registrei seu contato!",
+            "revised_response": "Registrei seu contato!",
+            "intent": "share_contact", "language": "pt-BR", "current_page": "/",
+            "tool_results": [],
+        }
+        await nodes.save_log_qdrant(state)
+
+        stored = captured["payload"]["user_input"]
+        assert "joao@x.com" not in stored
+        assert "98286-4581" not in stored
+        assert "[email redacted]" in stored and "[phone redacted]" in stored

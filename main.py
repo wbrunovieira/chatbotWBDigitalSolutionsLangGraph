@@ -25,6 +25,7 @@ from deepseek_optimizer import (
 )
 from security import enforce_chat_limits, record_spend, get_spend_snapshot
 import tools
+import guardrails
 from langfuse_client import create_trace, update_trace, flush_langfuse, evaluate_response, score_trace, set_current_trace
 
 load_dotenv()
@@ -249,7 +250,7 @@ async def _handle_chat(payload: ChatRequest):
         name="chatbot-interaction",
         user_id=user_id,
         session_id=user_id,
-        input_data={"message": user_input, "language": language, "current_page": current_page},
+        input_data={"message": guardrails.redact_pii(user_input), "language": language, "current_page": current_page},
         metadata={"page_url": page_url, "page_context": page_context},
     )
     # Carry the trace in a ContextVar, not in the graph state — a live trace object isn't
@@ -307,7 +308,7 @@ async def _handle_chat(payload: ChatRequest):
     # Update Langfuse trace with final output
     update_trace(
         langfuse_trace,
-        output={"response": full_response, "intent": result.get("intent")},
+        output={"response": guardrails.redact_pii(full_response), "intent": result.get("intent")},
         metadata={"final_step": result.get("step"), "cached": False},
     )
 

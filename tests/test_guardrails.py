@@ -43,3 +43,26 @@ class TestScrubOutput:
 
     def test_empty_is_safe(self):
         assert guardrails.scrub_output("") == ""
+
+
+class TestRedactPii:
+    def test_masks_email_phone_and_documents(self):
+        out = guardrails.redact_pii(
+            "email joao@padaria.com, fone (11) 98286-4581, cpf 123.456.789-00, cnpj 12.345.678/0001-99"
+        )
+        assert "joao@padaria.com" not in out
+        assert "98286-4581" not in out
+        assert "123.456.789-00" not in out
+        assert "12.345.678/0001-99" not in out
+        assert "[email redacted]" in out and "[phone redacted]" in out and "[document redacted]" in out
+
+    def test_masks_international_phone(self):
+        assert "98286" not in guardrails.redact_pii("me liga +55 11 98286-4581")
+
+    def test_leaves_prices_dates_and_names_alone(self):
+        for keep in ("orçamento de R$ 5000", "prazo de 4 a 12 semanas", "João da Padaria Central"):
+            assert guardrails.redact_pii(keep) == keep
+
+    def test_none_and_empty_are_safe(self):
+        assert guardrails.redact_pii(None) is None
+        assert guardrails.redact_pii("") == ""
