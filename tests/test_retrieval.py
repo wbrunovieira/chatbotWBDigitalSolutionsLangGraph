@@ -3,6 +3,7 @@
 import pytest
 
 import db
+import langfuse_client
 import nodes
 
 
@@ -28,13 +29,13 @@ class FakeQdrant:
 @pytest.fixture(autouse=True)
 def stub_embedding(monkeypatch):
     # Retrieval embeds the query; don't download/run the ONNX model in tests.
-    monkeypatch.setattr(nodes, "compute_embedding", lambda text: [0.1] * 384)
+    monkeypatch.setattr(nodes.embeddings, "compute_embedding", lambda text: [0.1] * 384)
 
 
 class TestRetrieveCompanyContext:
     async def test_joins_topk_chunks_and_records_citations(self, monkeypatch):
         captured = {}
-        monkeypatch.setattr(nodes, "update_trace", lambda trace, metadata=None: captured.update(metadata or {}))
+        monkeypatch.setattr(langfuse_client, "update_trace", lambda trace, metadata=None: captured.update(metadata or {}))
         client = FakeQdrant(results=[
             FakePoint({"text": "Websites chunk", "section": "Services > Websites"}, 0.82),
             FakePoint({"text": "Automation chunk", "section": "Services > Automation"}, 0.55),

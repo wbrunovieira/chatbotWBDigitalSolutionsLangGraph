@@ -3,6 +3,7 @@
 import pytest
 
 import nodes
+import langfuse_client
 import tools
 
 
@@ -33,19 +34,19 @@ def sequence_chat(responses):
 
 @pytest.fixture(autouse=True)
 def quiet_langfuse(monkeypatch):
-    monkeypatch.setattr(nodes, "start_llm_generation", lambda **kw: None)
-    monkeypatch.setattr(nodes, "end_llm_generation", lambda **kw: None)
+    monkeypatch.setattr(langfuse_client, "start_llm_generation", lambda **kw: None)
+    monkeypatch.setattr(langfuse_client, "end_llm_generation", lambda **kw: None)
 
 
 class TestToolLoop:
     async def test_no_tool_call_returns_text(self, monkeypatch):
-        monkeypatch.setattr(nodes, "_deepseek_chat", sequence_chat([text_response("Olá! 👋")]))
+        monkeypatch.setattr(nodes.generation, "_deepseek_chat", sequence_chat([text_response("Olá! 👋")]))
         reply, results = await nodes._run_tool_loop([], None, None)
         assert reply == "Olá! 👋"
         assert results == []
 
     async def test_model_calls_create_lead_then_answers(self, monkeypatch):
-        monkeypatch.setattr(nodes, "_deepseek_chat", sequence_chat([
+        monkeypatch.setattr(nodes.generation, "_deepseek_chat", sequence_chat([
             tool_call_response("create_lead", '{"business_name": "Padaria do Zé"}'),
             text_response("Registrei seu contato! 😊"),
         ]))
@@ -66,7 +67,7 @@ class TestToolLoop:
     async def test_hallucinated_args_become_empty_and_still_dispatch(self, monkeypatch):
         # Invalid JSON in the tool-call arguments must not crash; it parses to {} and
         # dispatch handles the validation failure gracefully.
-        monkeypatch.setattr(nodes, "_deepseek_chat", sequence_chat([
+        monkeypatch.setattr(nodes.generation, "_deepseek_chat", sequence_chat([
             tool_call_response("create_lead", "not-json{{"),
             text_response("ok"),
         ]))
@@ -86,7 +87,7 @@ class TestToolLoop:
             # Keep requesting a tool while tools are offered; answer in text once they're off.
             return tool_call_response("create_lead", "{}") if use_tools else text_response("resposta final")
 
-        monkeypatch.setattr(nodes, "_deepseek_chat", fake)
+        monkeypatch.setattr(nodes.generation, "_deepseek_chat", fake)
 
         async def fake_dispatch(name, args):
             return {"ok": True, "message": "ok"}
@@ -97,7 +98,7 @@ class TestToolLoop:
         assert len(results) == 2  # one dispatch per bounded iteration, then a forced text answer
 
     async def test_malformed_api_response_degrades_gracefully(self, monkeypatch):
-        monkeypatch.setattr(nodes, "_deepseek_chat", sequence_chat([{"error": "500"}]))
+        monkeypatch.setattr(nodes.generation, "_deepseek_chat", sequence_chat([{"error": "500"}]))
         reply, results = await nodes._run_tool_loop([], None, None)
         assert "WhatsApp" in reply
         assert results == []
@@ -109,7 +110,7 @@ class TestToolLoop:
             {"id": "a", "function": {"name": "create_lead", "arguments": '{"business_name":"X"}'}},
             {"id": "b", "function": {"name": "schedule_meeting", "arguments": "{}"}},
         ]}}], "usage": {}}
-        monkeypatch.setattr(nodes, "_deepseek_chat", sequence_chat([multi, text_response("ok")]))
+        monkeypatch.setattr(nodes.generation, "_deepseek_chat", sequence_chat([multi, text_response("ok")]))
 
         async def fake_dispatch(name, args):
             return {"ok": True, "message": name}
@@ -132,7 +133,7 @@ class TestGenerateResponseWiring:
         async def boom(messages, temperature=0.7, use_tools=False):
             raise _httpx.ConnectError("connection refused")
 
-        monkeypatch.setattr(nodes, "_deepseek_chat", boom)
+        monkeypatch.setattr(nodes.generation, "_deepseek_chat", boom)
         state = {"user_input": "oi", "augmented_input": "responda", "langfuse_trace": None, "messages": []}
         result = await nodes.generate_response(state)
         assert result["step"] == "error_generation"
@@ -153,7 +154,7 @@ class TestReviseResponseWiring:
         # An expired/invalid DeepSeek key returns JSON without "choices". revise_response
         # must fall back to the already-generated answer, not raise KeyError -> 500.
         # (Reproduces the crash the one-command demo surfaced with a bad key.)
-        monkeypatch.setattr(nodes, "get_prompt", lambda *a, **k: None)
+        monkeypatch.setattr(langfuse_client, "get_prompt", lambda *a, **k: None)
 
         async def fake_cc(*a, **k):
             return _FakeResp({"error": {"message": "Unauthorized"}})
