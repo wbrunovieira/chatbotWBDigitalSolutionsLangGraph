@@ -1,6 +1,7 @@
 # main.py
 import hmac
 import re
+import uuid
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -69,6 +70,19 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan, **docs_kwargs(config.IS_PRODUCTION))
+
+
+def _memory_thread_id(user_id: str) -> str:
+    """
+    Checkpointer thread key for conversation memory. A real user_id keys stable per-
+    conversation memory; a SHARED/anonymous id (the "anon" default) must NOT share a thread
+    — that would leak one visitor's conversation to another — so it gets an ephemeral,
+    per-request thread (isolated, effectively no cross-request memory) until the frontend
+    sends a stable per-session id.
+    """
+    if user_id in config.SHARED_USER_IDS:
+        return f"ephemeral-{uuid.uuid4()}"
+    return user_id
 
 
 def split_greeting_bubbles(text: str) -> list:
@@ -257,8 +271,7 @@ async def _handle_chat(payload: ChatRequest):
         },
     }
 
-    # thread_id keys the checkpointer's per-conversation memory (see graph_config).
-    result = await graph.ainvoke(state, config={"configurable": {"thread_id": user_id}})
+    result = await graph.ainvoke(state, config={"configurable": {"thread_id": _memory_thread_id(user_id)}})
 
 
     # Estruturar resposta para permitir exibição natural no frontend

@@ -64,3 +64,19 @@ class TestConversationMemory:
 
         # thread B must NOT see thread A's message.
         assert "sou da thread A" not in " ".join(m["content"] for m in seen[-1])
+
+
+class TestThreadIsolationForSharedUsers:
+    """The 'anon' default user_id must not make strangers share a memory thread (blocker fix)."""
+
+    def test_real_user_id_keys_stable_memory(self):
+        import main
+        assert main._memory_thread_id("user-42") == "user-42"
+
+    def test_anonymous_visitors_get_isolated_ephemeral_threads(self):
+        import main
+        t1 = main._memory_thread_id("anon")
+        t2 = main._memory_thread_id("anon")
+        assert t1 != t2                       # two anon visitors do NOT share memory
+        assert t1.startswith("ephemeral-")
+        assert main._memory_thread_id("")  != main._memory_thread_id("")   # empty id too
