@@ -168,10 +168,11 @@ class TestReviseResponseWiring:
         # must fall back to the already-generated answer, not raise KeyError -> 500.
         # (Reproduces the crash the one-command demo surfaced with a bad key.)
         monkeypatch.setattr(nodes, "get_prompt", lambda *a, **k: None)
-        monkeypatch.setattr(
-            nodes.httpx, "AsyncClient",
-            lambda *a, **k: _FakeClient({"error": {"message": "Unauthorized"}}),
-        )
+
+        async def fake_cc(*a, **k):
+            return _FakeResp({"error": {"message": "Unauthorized"}})
+
+        monkeypatch.setattr(nodes.deepseek_client, "chat_completion", fake_cc)
         original = "Olá! Posso te ajudar com sites, automação e IA aqui mesmo."
         state = {"response": original, "language": "pt-BR", "langfuse_trace": None}
 

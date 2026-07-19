@@ -11,6 +11,10 @@ logging.basicConfig(level=logging.INFO)
 
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+# DeepSeek's OpenAI-compatible endpoint + model. Centralized here (were hardcoded at every
+# call site) so a provider/model swap is a one-place change — see deepseek_client.py.
+DEEPSEEK_API_URL = os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com/v1/chat/completions")
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 QDRANT_HOST = os.getenv("QDRANT_HOST")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 
