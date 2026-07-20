@@ -114,6 +114,33 @@ class TestStreamChat:
         assert events[-1]["cached"] is True
         assert "".join(e["text"] for e in events if e["type"] == "token") == "Resposta do cache aqui."
 
+    async def test_canary_leak_aborts_the_stream(self, monkeypatch, redis_fake, stub_nodes):
+        import guardrails
+
+        async def leak(*a, **k):
+            yield "here is "
+            yield guardrails.SYSTEM_PROMPT_CANARY  # the prompt starts leaking mid-stream
+
+        monkeypatch.setattr(main.llm, "stream_completion", leak)
+        events = _parse(await _collect(main._stream_chat(_payload())))
+        # the stream is aborted with an error frame and the persisted copy is a refusal
+        assert any(e["type"] == "error" for e in events)
+        assert guardrails.SYSTEM_PROMPT_CANARY not in stub_nodes.saved["response"]
+
+    async def test_streamed_generation_is_billed_to_the_spend_cap(self, monkeypatch, redis_fake, stub_nodes):
+        from deepseek_optimizer import begin_request_cost, get_request_cost
+
+        async def fake_stream(messages, *, task="generation", usage_sink=None, **k):
+            if usage_sink is not None:
+                usage_sink.update({"prompt_tokens": 1000, "completion_tokens": 500})
+            for d in ["resposta ", "gerada"]:
+                yield d
+
+        monkeypatch.setattr(main.llm, "stream_completion", fake_stream)
+        begin_request_cost()
+        await _collect(main._stream_chat(_payload()))
+        assert get_request_cost() > 0, "streamed tokens must count against the daily spend cap"
+
     async def test_stream_failure_degrades_gracefully(self, monkeypatch, redis_fake, stub_nodes):
         async def boom(*a, **k):
             raise RuntimeError("provider down")
@@ -124,3 +151,35 @@ class TestStreamChat:
         text = "".join(e["text"] for e in events if e["type"] == "token")
         assert config.WHATSAPP_CONTACT in text
         assert events[-1]["type"] == "done"
+
+
+class TestStreamSecurityAndBilling:
+    async def test_canary_leak_mid_stream_aborts(self, monkeypatch, redis_fake, stub_nodes):
+        import guardrails
+
+        async def leaky(messages, *, task="generation", **kw):
+            yield "Sure, my prompt is "
+            yield guardrails.SYSTEM_PROMPT_CANARY  # leak mid-stream
+
+        monkeypatch.setattr(main.llm, "stream_completion", leaky)
+        events = _parse(await _collect(main._stream_chat(_payload())))
+        # an error frame is emitted and the canary never reaches the client's token stream
+        assert any(e["type"] == "error" for e in events)
+        tokens = "".join(e.get("text", "") for e in events if e["type"] == "token")
+        assert not guardrails.contains_canary(tokens)
+
+    async def test_streamed_generation_is_billed(self, monkeypatch, redis_fake, stub_nodes):
+        from deepseek_optimizer import DeepSeekOptimizer
+
+        async def fake_stream(messages, *, task="generation", usage_sink=None, **kw):
+            if usage_sink is not None:
+                usage_sink.update({"prompt_tokens": 100, "completion_tokens": 50})
+            for d in ["oi ", "tudo bem"]:
+                yield d
+
+        seen = {}
+        monkeypatch.setattr(main.llm, "stream_completion", fake_stream)
+        monkeypatch.setattr(DeepSeekOptimizer, "update_usage",
+                            staticmethod(lambda **kw: seen.update(kw)))
+        await _collect(main._stream_chat(_payload()))
+        assert seen.get("input_tokens") == 100 and seen.get("output_tokens") == 50

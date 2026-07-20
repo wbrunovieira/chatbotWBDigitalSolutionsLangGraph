@@ -294,8 +294,8 @@ async def _stream_chat(payload: ChatRequest):
     are chunked (there is no live LLM stream to tap). Tools, self-revision and conversation
     memory stay on /chat — streaming is incompatible with the tool loop — and the turn is
     persisted (PII-redacted) AFTER the stream closes so logging never delays the first token.
-    Token cost isn't metered here (the stream has no usage frame); abuse is still bounded by
-    the rate limit + daily spend cap enforced at entry.
+    The streamed generation is metered against the spend cap via the SSE usage frame (falling
+    back to a char-based estimate), and a canary leak mid-stream aborts the stream immediately.
     """
     language = payload.language
     current_page = payload.current_page
@@ -347,9 +347,18 @@ async def _stream_chat(payload: ChatRequest):
         # Same message assembly as /chat (hardened system prompt + personalization hint +
         # instruction), so the streamed answer matches the non-streaming one.
         messages, _ = nodes.build_llm_messages(state)
+        usage: dict = {}
         try:
-            async for delta in llm.stream_completion(messages, task="generation", temperature=0.7):
+            async for delta in llm.stream_completion(messages, task="generation",
+                                                     temperature=0.7, usage_sink=usage):
                 full += delta
+                # Output guardrail DURING the stream: if the canary starts leaking, abort now
+                # instead of streaming the rest of the system prompt to the client.
+                if guardrails.contains_canary(full):
+                    logging.warning("stream output guardrail: canary leak — aborting stream")
+                    full = guardrails.refusal(language)
+                    yield _sse({"type": "error", "message": "blocked"})
+                    break
                 yield _sse({"type": "token", "text": delta})
         except Exception as exc:  # a mid-stream failure degrades to a graceful message
             logging.error("stream generation failed: %s", exc)
@@ -357,8 +366,21 @@ async def _stream_chat(payload: ChatRequest):
                 full = f"Desculpe, tive um problema técnico. Fale com a gente no WhatsApp {config.WHATSAPP_CONTACT}!"
                 for piece in _chunk_text(full):
                     yield _sse({"type": "token", "text": piece})
-        # Output guardrail on the accumulated text (tokens are already sent, but the persisted
-        # copy — and any client that re-renders from `full` — uses the scrubbed version).
+        # Bill the streamed generation against the spend cap — a streamed request would
+        # otherwise cost 0 to the cap, defeating the daily/per-IP abuse backstop. Use the real
+        # usage chunk when present, else estimate from text (~4 chars/token).
+        if usage:
+            DeepSeekOptimizer.update_usage(
+                input_tokens=usage.get("prompt_tokens", 0),
+                output_tokens=usage.get("completion_tokens", 0),
+            )
+        else:
+            DeepSeekOptimizer.update_usage(
+                input_tokens=sum(len(m.get("content") or "") for m in messages) // 4,
+                output_tokens=len(full) // 4,
+            )
+        # Backstop scrub on the accumulated text (a leak mid-stream is already aborted above;
+        # this also catches the paraphrased-structure case for the persisted copy).
         full = guardrails.scrub_output(full, language)
 
     yield _sse({"type": "done", "cached": False, "intent": intent, "language_used": language})

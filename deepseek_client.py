@@ -66,12 +66,17 @@ async def stream_chat_completion(
     model: str | None = None,
     api_url: str | None = None,
     api_key: str | None = None,
+    usage_sink: dict | None = None,
 ):
     """Stream an OpenAI-compatible chat completion, yielding content-delta strings (#14).
 
     Async generator over the SSE `data:` lines: parses each chunk's
     choices[0].delta.content and yields non-empty deltas, stopping at `[DONE]`. Malformed
     chunks are skipped rather than raising, so one bad line can't abort a live stream.
+
+    If `usage_sink` (a dict) is provided, requests `stream_options.include_usage` and fills it
+    with the final usage chunk (prompt/completion tokens) so the caller can bill the streamed
+    generation against the spend cap — otherwise a streamed request would cost 0 to the cap.
     """
     body = {
         "model": model or DEEPSEEK_MODEL,
@@ -79,6 +84,8 @@ async def stream_chat_completion(
         "temperature": temperature,
         "stream": True,
     }
+    if usage_sink is not None:
+        body["stream_options"] = {"include_usage": True}
     headers = {
         "Authorization": f"Bearer {api_key or DEEPSEEK_API_KEY}",
         "Content-Type": "application/json",
@@ -96,8 +103,15 @@ async def stream_chat_completion(
                 if data == "[DONE]":
                     break
                 try:
-                    delta = json.loads(data)["choices"][0]["delta"].get("content")
-                except (ValueError, KeyError, IndexError, TypeError):
+                    chunk = json.loads(data)
+                except ValueError:
+                    continue
+                # The final usage chunk (choices=[]) carries token counts when include_usage is on.
+                if usage_sink is not None and isinstance(chunk.get("usage"), dict):
+                    usage_sink.update(chunk["usage"])
+                try:
+                    delta = chunk["choices"][0]["delta"].get("content")
+                except (KeyError, IndexError, TypeError):
                     continue
                 if delta:
                     yield delta
