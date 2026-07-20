@@ -22,11 +22,12 @@ async def raw_client(redis_fake, limits):
         yield c
 
 
-class TestChatStreamRemoved:
-    async def test_chat_stream_is_gone(self, raw_client):
-        # It was a fake endpoint returning hardcoded strings; the widget uses /chat.
-        resp = await raw_client.post("/chat/stream", json={"message": "oi"})
-        assert resp.status_code in (404, 405)
+class TestChatStreamEndpoint:
+    def test_chat_stream_is_a_registered_post_route(self):
+        # #14 re-introduced /chat/stream as a REAL SSE endpoint (behaviour covered in
+        # test_streaming.py). Assert it's wired without hitting the LLM here.
+        route = next((r for r in main.app.routes if getattr(r, "path", None) == "/chat/stream"), None)
+        assert route is not None and "POST" in route.methods
 
 
 class TestUsageReportAuth:

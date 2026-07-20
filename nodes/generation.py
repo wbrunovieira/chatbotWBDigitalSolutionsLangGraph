@@ -173,6 +173,47 @@ async def _run_tool_loop(messages: list, trace, instruction_prompt, max_iters: i
     return content, tool_results
 
 
+_DEFAULT_INSTRUCTION = (
+    "Before answering, always make sure to:\n"
+    "- Preserve the user's original language\n"
+    "- Keep responses concise (max 3-4 paragraphs)\n"
+    "- Only include contact info if the user asked for it or wants a human\n\n"
+)
+
+
+def build_llm_messages(state: dict):
+    """Assemble the [system, ...history, user] messages for the generation call.
+
+    Shared by the graph node (generate_response) and the streaming endpoint so both send the
+    identical hardened system prompt, personalization hint (#8b), replayed history, and the
+    RAG-augmented current turn. Returns (messages, instruction_prompt) — the latter is passed
+    to Langfuse for prompt linkage.
+    """
+    user_input = state["user_input"]
+    augmented_input = state.get("augmented_input")
+
+    instruction_prompt = langfuse_client.get_prompt("generate_response_instruction")
+    instruction = (instruction_prompt.compile() + "\n\n") if instruction_prompt else _DEFAULT_INSTRUCTION
+    query = f"{instruction}{augmented_input}" if augmented_input else f"{instruction}{user_input}"
+
+    # `history` = accumulated prior turns (raw user/assistant text, no system prompt), replayed
+    # for short-term memory. The current turn is sent AUGMENTED (RAG context); only the RAW user
+    # text is persisted, so past turns don't carry stale retrieval context.
+    history = state.get("messages", [])
+    # Light personalization (#8b): a behavioral hint that forbids revealing we track browsing.
+    system_prompt = guardrails.harden_system_prompt(TOOL_SYSTEM_PROMPT)
+    hint = behavior_ctx.personalization_hint(state.get("behavior"))
+    if hint:
+        system_prompt = f"{system_prompt}\n\n{hint}"
+
+    messages = (
+        [{"role": "system", "content": system_prompt}]
+        + history
+        + [{"role": "user", "content": query}]
+    )
+    return messages, instruction_prompt
+
+
 async def generate_response(state: dict) -> dict:
     user_input = state["user_input"]
     augmented_input = state.get("augmented_input")
@@ -189,35 +230,7 @@ async def generate_response(state: dict) -> dict:
             "step": "input_guardrail_refusal",
         }
 
-    # Get instruction prompt from Langfuse
-    instruction_prompt = langfuse_client.get_prompt("generate_response_instruction")
-    if instruction_prompt:
-        instruction = instruction_prompt.compile() + "\n\n"
-    else:
-        instruction = (
-            "Before answering, always make sure to:\n"
-            "- Preserve the user's original language\n"
-            "- Keep responses concise (max 3-4 paragraphs)\n"
-            "- Only include contact info if the user asked for it or wants a human\n\n"
-        )
-
-    query = f"{instruction}{augmented_input}" if augmented_input else f"{instruction}{user_input}"
-
-    # `history` is the accumulated prior turns (raw user/assistant text, no system prompt),
-    # replayed for short-term memory. The current turn is sent AUGMENTED (with RAG context);
-    # only the RAW user text is persisted, so past turns don't carry stale retrieval context.
-    history = state.get("messages", [])
-    # Light personalization (#8b): if the frontend sent behavioral context, add an INTERNAL
-    # hint so the model tailors the answer — the hint itself forbids revealing we track.
-    system_prompt = guardrails.harden_system_prompt(TOOL_SYSTEM_PROMPT)
-    hint = behavior_ctx.personalization_hint(state.get("behavior"))
-    if hint:
-        system_prompt = f"{system_prompt}\n\n{hint}"
-    llm_messages = (
-        [{"role": "system", "content": system_prompt}]
-        + history
-        + [{"role": "user", "content": query}]
-    )
+    llm_messages, instruction_prompt = build_llm_messages(state)
 
     try:
         reply, tool_results = await _run_tool_loop(llm_messages, trace, instruction_prompt)
@@ -234,6 +247,8 @@ async def generate_response(state: dict) -> dict:
             "step": "error_generation",
         }
 
+    # Re-read the prior turns here (build_llm_messages owns its own copy) to append this turn.
+    history = state.get("messages", [])
     new_history = (
         history
         + [{"role": "user", "content": user_input}, {"role": "assistant", "content": reply}]

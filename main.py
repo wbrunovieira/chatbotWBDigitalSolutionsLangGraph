@@ -1,6 +1,7 @@
 # main.py
 import asyncio
 import hmac
+import json
 import random
 import re
 import uuid
@@ -8,8 +9,10 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import StreamingResponse
 from qdrant_client.http.models import VectorParams, Distance
 from fastapi.middleware.cors import CORSMiddleware
+import nodes
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from graph_config import graph, evict_thread
 import logging
@@ -30,6 +33,7 @@ from deepseek_optimizer import (
 from security import enforce_chat_limits, record_spend, get_spend_snapshot
 import tools
 import guardrails
+import llm
 from language import resolve_language
 from langfuse_client import create_trace, update_trace, flush_langfuse, evaluate_response, score_trace, set_current_trace
 
@@ -270,6 +274,148 @@ async def chat(payload: ChatRequest, client_ip: str = Depends(enforce_chat_limit
         # In a finally block so a request that dies mid-graph still bills whatever
         # DeepSeek calls it already made — a crashing request is not a free one.
         await record_spend(client_ip, get_request_cost())
+
+
+def _sse(payload: dict) -> str:
+    """Format one Server-Sent Event frame."""
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _chunk_text(text: str):
+    """Split an already-computed answer (cache hit / greeting) into token-ish pieces so the
+    widget renders it the same way as a live token stream."""
+    return re.findall(r"\S+\s*", text or "")
+
+
+async def _stream_chat(payload: ChatRequest):
+    """SSE generator for /chat/stream (#14).
+
+    Real token streaming on the normal RAG path; cache hits, greetings and off-topic replies
+    are chunked (there is no live LLM stream to tap). Tools, self-revision and conversation
+    memory stay on /chat — streaming is incompatible with the tool loop — and the turn is
+    persisted (PII-redacted) AFTER the stream closes so logging never delays the first token.
+    The streamed generation is metered against the spend cap via the SSE usage frame (falling
+    back to a char-based estimate), and a canary leak mid-stream aborts the stream immediately.
+    """
+    language = payload.language
+    current_page = payload.current_page
+    full = ""
+
+    # Input guardrail: refuse an obvious injection up front (no LLM, no leak).
+    if guardrails.is_injection_attempt(payload.message):
+        yield _sse({"type": "start", "intent": "off_topic"})
+        for piece in _chunk_text(guardrails.refusal(language)):
+            yield _sse({"type": "token", "text": piece})
+        yield _sse({"type": "done", "cached": False, "intent": "off_topic", "language_used": language})
+        return
+
+    # Exact-match cache: stream the stored answer in chunks.
+    cache_key = sha256(f"{payload.message}_{language}_{current_page}_{payload.user_id}".encode("utf-8")).hexdigest()
+    cached = await get_cached_response(cache_key)
+    if cached:
+        yield _sse({"type": "start", "intent": cached.get("detected_intent")})
+        for piece in _chunk_text(cached.get("revised_response", "")):
+            yield _sse({"type": "token", "text": piece})
+        yield _sse({"type": "done", "cached": True, "cache_type": "redis",
+                    "intent": cached.get("detected_intent"), "language_used": language})
+        return
+
+    state = _build_state(payload, _page_context(current_page))
+    state = await nodes.detect_intent(state)
+    intent = state.get("intent", "inquire_services")
+    yield _sse({"type": "start", "intent": intent})
+
+    if intent == "chat_with_agent":
+        yield _sse({"type": "done", "cached": False, "intent": intent, "language_used": language})
+        return
+
+    if intent == "greeting":
+        state = await nodes.generate_greeting_response(state)
+        full = state.get("response", "")
+        for piece in _chunk_text(full):
+            yield _sse({"type": "token", "text": piece})
+    elif intent == "off_topic":
+        state = await nodes.generate_off_topic_response(state)
+        full = state.get("response", "")
+        for piece in _chunk_text(full):
+            yield _sse({"type": "token", "text": piece})
+    else:
+        # Normal RAG path: retrieve + augment (fast), then stream the generation tokens live.
+        state = await nodes.retrieve_company_context(state)
+        state = await nodes.retrieve_user_context(state)
+        state = await nodes.augment_query(state)
+        # Same message assembly as /chat (hardened system prompt + personalization hint +
+        # instruction), so the streamed answer matches the non-streaming one.
+        messages, _ = nodes.build_llm_messages(state)
+        usage: dict = {}
+        try:
+            async for delta in llm.stream_completion(messages, task="generation",
+                                                     temperature=0.7, usage_sink=usage):
+                full += delta
+                # Output guardrail DURING the stream: if the canary starts leaking, abort now
+                # instead of streaming the rest of the system prompt to the client.
+                if guardrails.contains_canary(full):
+                    logging.warning("stream output guardrail: canary leak — aborting stream")
+                    full = guardrails.refusal(language)
+                    yield _sse({"type": "error", "message": "blocked"})
+                    break
+                yield _sse({"type": "token", "text": delta})
+        except Exception as exc:  # a mid-stream failure degrades to a graceful message
+            logging.error("stream generation failed: %s", exc)
+            if not full:
+                full = f"Desculpe, tive um problema técnico. Fale com a gente no WhatsApp {config.WHATSAPP_CONTACT}!"
+                for piece in _chunk_text(full):
+                    yield _sse({"type": "token", "text": piece})
+        # Bill the streamed generation against the spend cap — a streamed request would
+        # otherwise cost 0 to the cap, defeating the daily/per-IP abuse backstop. Use the real
+        # usage chunk when present, else estimate from text (~4 chars/token).
+        if usage:
+            DeepSeekOptimizer.update_usage(
+                input_tokens=usage.get("prompt_tokens", 0),
+                output_tokens=usage.get("completion_tokens", 0),
+            )
+        else:
+            DeepSeekOptimizer.update_usage(
+                input_tokens=sum(len(m.get("content") or "") for m in messages) // 4,
+                output_tokens=len(full) // 4,
+            )
+        # Backstop scrub on the accumulated text (a leak mid-stream is already aborted above;
+        # this also catches the paraphrased-structure case for the persisted copy).
+        full = guardrails.scrub_output(full, language)
+
+    yield _sse({"type": "done", "cached": False, "intent": intent, "language_used": language})
+
+    # After the stream closes: persist the turn + sample the judge, best-effort.
+    state["response"] = full
+    state.setdefault("revised_response", full)
+    try:
+        await nodes.save_log_qdrant(state)
+    except Exception as exc:  # noqa: BLE001 — logging must never surface to the client
+        logging.warning("stream post-log failed: %s", exc)
+
+
+@app.post("/chat/stream")
+async def chat_stream(payload: ChatRequest, client_ip: str = Depends(enforce_chat_limits)):
+    """SSE streaming variant of /chat (#14). Emits {type: start|token|done|error} frames."""
+    begin_request_cost()
+    tools.set_client_ip(client_ip)
+    tools.set_behavior(payload.behavior)
+
+    async def event_stream():
+        try:
+            async for frame in _stream_chat(payload):
+                yield frame
+        except Exception as exc:  # noqa: BLE001 — never leak a stack trace into the stream
+            logging.error("chat_stream failed: %s", exc)
+            yield _sse({"type": "error", "message": "stream failed"})
+        finally:
+            await record_spend(client_ip, get_request_cost())
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # Page -> a short pt-BR context hint fed to the prompts. Data, not branching code.

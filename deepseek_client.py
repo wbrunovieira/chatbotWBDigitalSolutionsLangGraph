@@ -7,6 +7,8 @@ timeout, and error-prone response unpack. A change to any of those had to be mad
 places. This centralizes the call so provider/model/timeout live in one spot (config).
 """
 
+import json
+
 import httpx
 
 from config import DEEPSEEK_API_KEY, DEEPSEEK_API_URL, DEEPSEEK_MODEL
@@ -53,3 +55,63 @@ async def chat_completion(
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         return await client.post(api_url or DEEPSEEK_API_URL, headers=headers, json=body)
+
+
+async def stream_chat_completion(
+    messages: list,
+    *,
+    temperature: float = 0.7,
+    extra_headers: dict | None = None,
+    timeout: float = DEFAULT_TIMEOUT,
+    model: str | None = None,
+    api_url: str | None = None,
+    api_key: str | None = None,
+    usage_sink: dict | None = None,
+):
+    """Stream an OpenAI-compatible chat completion, yielding content-delta strings (#14).
+
+    Async generator over the SSE `data:` lines: parses each chunk's
+    choices[0].delta.content and yields non-empty deltas, stopping at `[DONE]`. Malformed
+    chunks are skipped rather than raising, so one bad line can't abort a live stream.
+
+    If `usage_sink` (a dict) is provided, requests `stream_options.include_usage` and fills it
+    with the final usage chunk (prompt/completion tokens) so the caller can bill the streamed
+    generation against the spend cap — otherwise a streamed request would cost 0 to the cap.
+    """
+    body = {
+        "model": model or DEEPSEEK_MODEL,
+        "messages": messages,
+        "temperature": temperature,
+        "stream": True,
+    }
+    if usage_sink is not None:
+        body["stream_options"] = {"include_usage": True}
+    headers = {
+        "Authorization": f"Bearer {api_key or DEEPSEEK_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    if extra_headers:
+        headers.update(extra_headers)
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        async with client.stream("POST", api_url or DEEPSEEK_API_URL, headers=headers, json=body) as resp:
+            resp.raise_for_status()  # a 4xx/5xx surfaces to the endpoint, which degrades gracefully
+            async for line in resp.aiter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                data = line[len("data:"):].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data)
+                except ValueError:
+                    continue
+                # The final usage chunk (choices=[]) carries token counts when include_usage is on.
+                if usage_sink is not None and isinstance(chunk.get("usage"), dict):
+                    usage_sink.update(chunk["usage"])
+                try:
+                    delta = chunk["choices"][0]["delta"].get("content")
+                except (KeyError, IndexError, TypeError):
+                    continue
+                if delta:
+                    yield delta
