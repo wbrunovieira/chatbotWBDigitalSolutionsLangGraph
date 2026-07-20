@@ -101,6 +101,8 @@ jobs:
           LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
           LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
           WBCRM_API_TOKEN: ${{ secrets.WBCRM_API_TOKEN }}
+          EVOLUTION_API_KEY: ${{ secrets.EVOLUTION_API_KEY }}
+          MY_WHATSAPP_NUMBER: ${{ secrets.MY_WHATSAPP_NUMBER }}
         run: |
           # Written outside the repo tree so it can never be committed or uploaded.
           # StrictHostKeyChecking is left ON here (unlike the local inventory example)
@@ -126,6 +128,10 @@ jobs:
           data_path=/root/chatbot/volumes
           restrict_http_to_cloudflare=true
           wbcrm_api_token=${WBCRM_API_TOKEN}
+          evolution_api_url=http://evolution_api:8080
+          evolution_instance=wbdigital
+          evolution_api_key=${EVOLUTION_API_KEY}
+          my_whatsapp_number=${MY_WHATSAPP_NUMBER}
           EOF
 
       - name: Ansible syntax check
