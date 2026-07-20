@@ -4,8 +4,9 @@ import json
 import logging
 import re
 
-import deepseek_client
+import deepseek_client  # noqa: F401  (tests patch nodes.deepseek_client; llm delegates to it)
 import langfuse_client
+import llm
 from deepseek_optimizer import DeepSeekOptimizer
 
 # Order matters: off_topic is LAST so that if a service word also appears we prefer the
@@ -128,8 +129,9 @@ Respond with ONLY JSON: {{"intent": "<greeting|request_quote|inquire_services|sh
         # keeps a prompt/code mismatch from silently breaking intent detection.
         response_format = {"type": "json_object"} if "json" in prompt.lower() else None
 
-        response = await deepseek_client.chat_completion(
+        response = await llm.chat_completion(
             [{"role": "user", "content": prompt}],
+            task="intent",  # cheap/fast model for classification (#13)
             temperature=0.1,
             response_format=response_format,
             extra_headers=optimization_headers,

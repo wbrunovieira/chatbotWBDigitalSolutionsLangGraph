@@ -4,8 +4,9 @@ import httpx
 import logging
 
 import config
-import deepseek_client
+import deepseek_client  # noqa: F401  (tests patch nodes.deepseek_client; llm delegates to it)
 import langfuse_client
+import llm
 from deepseek_optimizer import DeepSeekOptimizer
 
 
@@ -68,8 +69,9 @@ async def revise_response(state: dict) -> dict:
             prompt=revise_prompt if revise_prompt else None,
         )
 
-        response = await deepseek_client.chat_completion(
+        response = await llm.chat_completion(
             [{"role": "user", "content": prompt}],
+            task="revision",
             temperature=0.5,
             extra_headers=optimization_headers,
         )

@@ -5,9 +5,10 @@ import json
 import logging
 
 import behavior as behavior_ctx
-import deepseek_client
+import deepseek_client  # noqa: F401  (tests patch nodes.deepseek_client; llm delegates to it)
 import guardrails
 import langfuse_client
+import llm
 import tools
 from config import MAX_HISTORY_MESSAGES
 from deepseek_optimizer import DeepSeekOptimizer
@@ -91,8 +92,9 @@ TOOL_SYSTEM_PROMPT = (
 
 async def _deepseek_chat(messages: list, temperature: float = 0.7, use_tools: bool = False) -> dict:
     """Single DeepSeek chat call. Returns the parsed JSON. Offers the tools when asked."""
-    resp = await deepseek_client.chat_completion(
+    resp = await llm.chat_completion(
         messages,
+        task="generation",  # stronger model for generation (#13)
         temperature=temperature,
         tools=tools.TOOL_SPECS if use_tools else None,
         extra_headers=DeepSeekOptimizer.get_optimization_headers(),

@@ -15,6 +15,18 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 # call site) so a provider/model swap is a one-place change — see deepseek_client.py.
 DEEPSEEK_API_URL = os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com/v1/chat/completions")
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+
+# Model routing (#13, see llm.py): a cheap/fast model for classification (intent) and a
+# stronger one for generation/revision. Both default to DEEPSEEK_MODEL, so the routing seam
+# is free until a cheaper intent model is pointed at INTENT_MODEL via env.
+INTENT_MODEL = os.getenv("INTENT_MODEL", DEEPSEEK_MODEL)
+GENERATION_MODEL = os.getenv("GENERATION_MODEL", DEEPSEEK_MODEL)
+
+# Secondary provider (#13): if the primary fails (transport error or 5xx), retry once on this
+# OpenAI-compatible endpoint. Unset by default -> no failover, behaviour unchanged.
+FALLBACK_API_URL = os.getenv("FALLBACK_API_URL", "")
+FALLBACK_API_KEY = os.getenv("FALLBACK_API_KEY", "")
+FALLBACK_MODEL = os.getenv("FALLBACK_MODEL", "")
 QDRANT_HOST = os.getenv("QDRANT_HOST")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 

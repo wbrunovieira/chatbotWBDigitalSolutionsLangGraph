@@ -318,11 +318,13 @@ async def evaluate_response(
             logging.debug("No LLM client for evaluation - skipping")
             return None
 
-        # Call LLM for evaluation (shared DeepSeek client; judge runs on a tighter timeout)
-        import deepseek_client
+        # Call LLM for evaluation (routed via llm.py — same model routing + provider fallback;
+        # runs on a tighter timeout).
+        import llm
 
-        resp = await deepseek_client.chat_completion(
+        resp = await llm.chat_completion(
             [{"role": "user", "content": compiled}],
+            task="generation",
             temperature=0.1,
             timeout=15.0,
         )

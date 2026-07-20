@@ -2,8 +2,8 @@
 
 import logging
 
-import deepseek_client
 import langfuse_client
+import llm
 
 
 async def generate_off_topic_response(state: dict) -> dict:
@@ -40,8 +40,9 @@ async def generate_off_topic_response(state: dict) -> dict:
             prompt=off_topic_prompt,
         )
 
-        resp = await deepseek_client.chat_completion(
+        resp = await llm.chat_completion(
             [{"role": "user", "content": prompt}],
+            task="generation",
             temperature=0.7,
         )
         data = resp.json()
