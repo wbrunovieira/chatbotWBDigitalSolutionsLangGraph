@@ -111,18 +111,21 @@ def split_greeting_bubbles(text: str) -> list:
 MAX_RESPONSE_BUBBLES = 5
 
 # The widget renders PLAIN TEXT, so markdown emphasis leaks through as literal characters
-# (e.g. "**WB Digital Solutions**"). Strip bold/italic/heading markers; keep the text.
-_MD_BOLD_ITALIC = re.compile(r"(\*\*|__|\*|_)(.+?)\1", re.DOTALL)
+# (e.g. "**WB Digital Solutions**"). Strip ONLY double-marker bold (**/__) and heading
+# markers — deliberately NOT single * or _, so technical text stays intact (snake_case like
+# `user_id`, math like `3 * 4`, `Next.js`). No DOTALL, so a stray marker can't collapse text
+# across paragraphs.
+_MD_BOLD = re.compile(r"(\*\*|__)(.+?)\1")
 _MD_HEADING = re.compile(r"^\s{0,3}#{1,6}\s+", re.MULTILINE)
 
 
 def strip_markdown(text: str) -> str:
-    """Remove markdown emphasis/heading markers the plain-text widget can't render."""
+    """Remove markdown bold/heading markers the plain-text widget can't render."""
     if not text:
         return text
-    text = _MD_BOLD_ITALIC.sub(r"\2", text)
+    text = _MD_BOLD.sub(r"\2", text)
     text = _MD_HEADING.sub("", text)
-    return text.replace("**", "").replace("__", "")
+    return text.replace("**", "")
 
 
 def format_response_parts(text: str, is_greeting: bool = False) -> list:

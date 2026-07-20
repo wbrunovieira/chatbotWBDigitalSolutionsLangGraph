@@ -71,6 +71,16 @@ class TestStripMarkdown:
     def test_plain_text_unchanged(self):
         assert main.strip_markdown("Olá! Tudo bem? 🚀") == "Olá! Tudo bem? 🚀"
 
+    def test_does_not_mangle_technical_text(self):
+        # single * / _ must be left alone: snake_case, math, tech names, URLs
+        for keep in ("user_id e all_MiniLM_L6", "3 * 4 = 12", "Next.js e Node.js",
+                     "https://x.com/a_b_c", "custa R$ 5 * 2"):
+            assert main.strip_markdown(keep) == keep
+
+    def test_does_not_collapse_across_paragraphs(self):
+        # no DOTALL: two stray ** in different lines don't eat everything between
+        assert main.strip_markdown("linha um **\n\nlinha dois") == "linha um \n\nlinha dois"
+
     def test_shape_response_strips_bold(self):
         out = main._shape_response(
             {"revised_response": "Fale com a **WB** hoje.", "intent": "inquire_services", "step": "x"},
