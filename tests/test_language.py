@@ -50,3 +50,22 @@ class TestFallback:
     ])
     def test_non_locale_paths_do_not_false_match(self, path):
         assert resolve_language(None, page_url=path) == "pt-BR"
+
+
+class TestLanguageInstructions:
+    """#23: the per-language answer instruction is a single, emphatic, exported source."""
+
+    def test_covers_every_supported_language(self):
+        import nodes
+        from language import SUPPORTED_LANGUAGES
+        for lang in SUPPORTED_LANGUAGES:
+            assert lang in nodes.LANGUAGE_INSTRUCTIONS
+
+    def test_instruction_is_emphatic_only(self):
+        import nodes
+        assert "ONLY" in nodes.LANGUAGE_INSTRUCTIONS["en"]
+        assert "SOLO" in nodes.LANGUAGE_INSTRUCTIONS["es"]
+
+    def test_unknown_language_falls_back_to_pt(self):
+        import nodes
+        assert nodes.language_instruction_for("xx") == nodes.LANGUAGE_INSTRUCTIONS["pt-BR"]
