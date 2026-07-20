@@ -65,3 +65,15 @@ async def chat_completion(messages: list, *, task: str = "generation", **kwargs)
         logging.warning("LLM primary %s on task=%s; failing over to secondary", status, task)
         return await _fallback_completion(messages, **kwargs)
     return resp
+
+
+async def stream_completion(messages: list, *, task: str = "generation", **kwargs):
+    """Stream a routed completion, yielding content-delta strings (#14).
+
+    Routes the model by task like chat_completion. No provider failover here: a mid-stream
+    switch would double-emit tokens, so a streaming failure surfaces to the endpoint, which
+    degrades to a graceful message.
+    """
+    model = kwargs.pop("model", None) or model_for(task)
+    async for delta in deepseek_client.stream_chat_completion(messages, model=model, **kwargs):
+        yield delta
