@@ -195,7 +195,9 @@ class ChatRequest(BaseModel):
             cleaned: dict[str, Any] = {}
             pages = value.get("pages_visited")
             if isinstance(pages, list):
-                cleaned["pages_visited"] = [str(p) for p in pages if p is not None][:50]
+                # Cap list length AND each item's length so a massive string can't bloat
+                # the state/prompt (truncate, don't reject — enrichment must never 422).
+                cleaned["pages_visited"] = [str(p)[:2048] for p in pages if p is not None][:50]
             journey = value.get("journey_score")
             if isinstance(journey, (int, float)) and not isinstance(journey, bool):
                 cleaned["journey_score"] = float(journey)

@@ -158,6 +158,11 @@ class TestFrontendContract:
         assert beh["geo_country"] == "55"
         assert beh.get("journey_score") is None  # non-numeric dropped
 
+    async def test_oversized_page_string_is_truncated_not_rejected(self, client, graph_calls):
+        resp = await post(client, {**VALID_PAYLOAD, "behavior": {"pages_visited": ["/x" + "y" * 5000]}})
+        assert resp.status_code == 200
+        assert len(graph_calls[0]["behavior"]["pages_visited"][0]) <= 2048
+
     async def test_behavior_that_is_not_an_object_is_dropped(self, client, graph_calls):
         resp = await post(client, {**VALID_PAYLOAD, "behavior": "garbage"})
         assert resp.status_code == 200
