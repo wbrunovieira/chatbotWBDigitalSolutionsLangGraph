@@ -61,7 +61,7 @@ def _detected_language(text: str) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--threshold", type=float, default=0.9)
+    ap.add_argument("--threshold", type=float, default=0.8)
     ap.add_argument("--dataset", default=str(ROOT / "evals" / "language.jsonl"))
     args = ap.parse_args()
 
