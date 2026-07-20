@@ -119,6 +119,19 @@ async def require_admin(authorization: str = Header(default="")) -> None:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
+class BehaviorContext(BaseModel):
+    """Optional engagement signal the Next.js server may attach (#8b): where the visitor has
+    been and how far into the journey they are. Used to score/enrich the lead and lightly
+    personalize the answer — never shown to the user. All fields optional so it's contract-safe.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    pages_visited: list[str] = Field(default_factory=list, max_length=50)
+    journey_score: float | None = None
+    geo_country: str | None = Field(default=None, max_length=8)
+
+
 class ChatRequest(BaseModel):
     """
     The payload the site widget posts. Field names and defaults ARE the contract with
@@ -135,6 +148,7 @@ class ChatRequest(BaseModel):
     message: str
     user_id: str = Field(default="anon", max_length=128)
     language: str = Field(default="pt-BR", max_length=16)
+    behavior: BehaviorContext | None = None
     current_page: str = Field(default="/", max_length=256)
     page_url: str = Field(default="", max_length=2048)
     timestamp: Any = ""
@@ -165,6 +179,34 @@ class ChatRequest(BaseModel):
                 data.get("current_page", ""),
             )
         return data
+
+    @field_validator("behavior", mode="before")
+    @classmethod
+    def lenient_behavior(cls, value: Any) -> Any:
+        # Optional enrichment must NEVER 422 the chat. Pydantic v2 doesn't cascade the
+        # parent's coerce_numbers_to_str into nested models, so a numeric page or geo from
+        # a frontend serialization bug would fail validation and take the whole request
+        # down. Coerce leniently here and drop anything malformed to None.
+        if value is None or isinstance(value, BehaviorContext):
+            return value
+        if not isinstance(value, dict):
+            return None
+        try:
+            cleaned: dict[str, Any] = {}
+            pages = value.get("pages_visited")
+            if isinstance(pages, list):
+                # Cap list length AND each item's length so a massive string can't bloat
+                # the state/prompt (truncate, don't reject — enrichment must never 422).
+                cleaned["pages_visited"] = [str(p)[:2048] for p in pages if p is not None][:50]
+            journey = value.get("journey_score")
+            if isinstance(journey, (int, float)) and not isinstance(journey, bool):
+                cleaned["journey_score"] = float(journey)
+            geo = value.get("geo_country")
+            if geo is not None:
+                cleaned["geo_country"] = str(geo)[:8]
+            return cleaned
+        except Exception:  # noqa: BLE001 — enrichment is best-effort; never break chat
+            return None
 
     @field_validator("message")
     @classmethod
@@ -219,6 +261,7 @@ async def chat(payload: ChatRequest, client_ip: str = Depends(enforce_chat_limit
     # the daily budget is spent. Being here means the request is allowed to cost money.
     begin_request_cost()
     tools.set_client_ip(client_ip)  # so create_lead can enforce a per-IP lead cap
+    tools.set_behavior(payload.behavior)  # so create_lead can score/enrich the lead (#8b)
     try:
         return await _handle_chat(payload)
     finally:
@@ -253,6 +296,7 @@ def _build_state(payload: ChatRequest, page_context: str) -> dict:
         "language": payload.language,
         "current_page": payload.current_page,
         "page_context": page_context,
+        "behavior": payload.behavior.model_dump() if payload.behavior else None,
         "memory": {},
         "metadata": {
             "page_url": payload.page_url,
