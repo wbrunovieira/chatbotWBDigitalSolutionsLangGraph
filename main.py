@@ -105,6 +105,38 @@ def split_greeting_bubbles(text: str) -> list:
     return [s.strip() for s in re.split(r"(?<=[.?!])\s+", text.strip()) if s.strip()]
 
 
+# Chat bubbles the widget renders per answer. Cap so a long answer isn't a wall of tiny
+# bubbles; overflow is merged back into the last one.
+MAX_RESPONSE_BUBBLES = 5
+
+
+def format_response_parts(text: str, is_greeting: bool = False) -> list:
+    """Split an answer into safe chat bubbles for the widget (#22).
+
+    Replaces the naive '.'/'\\n\\n' splitting: greetings split by sentence, other answers by
+    blank line (so a bulleted list — no blank lines between items — stays one bubble and a URL
+    is never broken across bubbles). Guarantees: no empty/whitespace-only bubbles, at most
+    MAX_RESPONSE_BUBBLES (the rest merged into the last), and always at least one bubble for a
+    non-empty answer.
+    """
+    text = (text or "").strip()
+    if not text:
+        return []
+
+    if is_greeting:
+        parts = split_greeting_bubbles(text)
+    else:
+        parts = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+
+    parts = [p for p in parts if p] or [text]
+
+    if len(parts) > MAX_RESPONSE_BUBBLES:
+        head = parts[: MAX_RESPONSE_BUBBLES - 1]
+        tail = "\n\n".join(parts[MAX_RESPONSE_BUBBLES - 1:])
+        parts = head + [tail]
+    return parts
+
+
 async def require_admin(authorization: str = Header(default="")) -> None:
     """
     Guard for operator-only endpoints. Expects `Authorization: Bearer <ADMIN_API_TOKEN>`.
@@ -459,10 +491,8 @@ def _shape_response(result: dict, language: str, current_page: str) -> dict:
     """The fixed response shape the widget reads. Greetings split into bubbles; other
     answers split on blank lines."""
     full_response = result.get("revised_response", result.get("response", ""))
-    if result.get("intent") == "greeting":
-        response_parts = split_greeting_bubbles(full_response)
-    else:
-        response_parts = [p.strip() for p in full_response.split("\n\n") if p.strip()]
+    is_greeting = result.get("intent") == "greeting"
+    response_parts = format_response_parts(full_response, is_greeting=is_greeting)
     return {
         "raw_response": result.get("response"),
         "revised_response": full_response,
