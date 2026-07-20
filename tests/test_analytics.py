@@ -60,6 +60,20 @@ class TestConversionFunnel:
         assert out["question_to_lead_rate"] == 0.0
         assert out["funnel_users"]["lead_captured"] == 0
 
+    def test_scan_is_capped(self, monkeypatch):
+        # A huge collection must not be scanned unbounded — the cap bounds memory + latency.
+        monkeypatch.setattr(analytics, "MAX_FUNNEL_SCAN", 3)
+
+        class Paged:
+            def scroll(self, collection_name, scroll_filter=None, offset=None, **kw):
+                # always returns a full page + a next offset (i.e. "infinite" collection)
+                pts = [SimpleNamespace(payload={"user_id": "u", "intent": "greeting", "tools_used": []})
+                       for _ in range(256)]
+                return pts, "next"
+
+        out = analytics.conversion_funnel(Paged(), window_days=None)
+        assert out["total_turns"] == 3  # stopped at the cap, did not loop forever
+
     def test_window_none_scans_all_time(self):
         # window_days=None must not build a timestamp filter (scroll_filter stays None)
         seen = {}

@@ -13,6 +13,7 @@ session-id follow-up), so they collapse into one bucket; the funnel is meaningfu
 identified users. Operator-only (see require_admin).
 """
 
+import os
 import time
 from collections import defaultdict
 
@@ -22,15 +23,20 @@ from qdrant_client.http.models import FieldCondition, Filter, Range
 QUESTION_INTENTS = {"inquire_services", "request_quote", "share_contact"}
 # Tools whose successful call means a lead was captured / a meeting offered.
 LEAD_TOOLS = {"create_lead", "schedule_meeting"}
+# Hard cap on how many points a single funnel query scans, so it stays bounded in memory +
+# latency even if chat_logs grows unexpectedly large (retention should keep it small, but
+# this endpoint must never turn into a slow, unbounded scan). Env-tunable.
+MAX_FUNNEL_SCAN = int(os.getenv("ANALYTICS_MAX_SCAN", "50000"))
 
 
 def _scan_chat_logs(client, since_ts):
-    """Page through chat_logs payloads (optionally newer than since_ts)."""
+    """Page through chat_logs payloads (optionally newer than since_ts), capped at
+    MAX_FUNNEL_SCAN points."""
     scroll_filter = None
     if since_ts is not None:
         scroll_filter = Filter(must=[FieldCondition(key="timestamp", range=Range(gte=since_ts))])
     payloads, offset = [], None
-    while True:
+    while len(payloads) < MAX_FUNNEL_SCAN:
         batch, offset = client.scroll(
             collection_name="chat_logs",
             scroll_filter=scroll_filter,
@@ -42,7 +48,7 @@ def _scan_chat_logs(client, since_ts):
         payloads.extend(p.payload or {} for p in batch)
         if offset is None:
             break
-    return payloads
+    return payloads[:MAX_FUNNEL_SCAN]
 
 
 def conversion_funnel(client, window_days: int | None = 30) -> dict:
