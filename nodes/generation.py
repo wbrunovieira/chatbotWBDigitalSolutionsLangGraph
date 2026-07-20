@@ -176,6 +176,17 @@ async def generate_response(state: dict) -> dict:
     augmented_input = state.get("augmented_input")
     trace = langfuse_client.get_current_trace()
 
+    # Input guardrail (#15): an unambiguous jailbreak / prompt-extraction attempt is refused
+    # up front — no LLM call, so it can't cost money or leak, regardless of what it asked.
+    if guardrails.is_injection_attempt(user_input):
+        logging.warning("input guardrail: injection attempt refused pre-LLM")
+        return {
+            **state,
+            "response": guardrails.refusal(state.get("language", "pt-BR")),
+            "tool_results": [],
+            "step": "input_guardrail_refusal",
+        }
+
     # Get instruction prompt from Langfuse
     instruction_prompt = langfuse_client.get_prompt("generate_response_instruction")
     if instruction_prompt:
