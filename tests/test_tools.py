@@ -103,6 +103,12 @@ class TestBehaviorEnrichment:
         await tools.dispatch("create_lead", {"business_name": "Padaria", "description": "quer um site"})
         assert fake_http.calls[0]["json"]["description"] == "quer um site"
 
+    async def test_enriched_description_stays_within_crm_limit(self, fake_http):
+        # Enrichment appends after Pydantic's 4000 cap, so create_lead must re-clamp.
+        tools.set_behavior({"pages_visited": ["/pricing", "/contact"]})
+        await tools.dispatch("create_lead", {"business_name": "X", "description": "d" * 4000})
+        assert len(fake_http.calls[0]["json"]["description"]) <= 4000
+
     async def test_crm_payload_keeps_stable_top_level_fields(self, fake_http):
         # Enrichment must NOT add new top-level keys (contract stability with the CRM).
         tools.set_behavior({"pages_visited": ["/pricing"]})

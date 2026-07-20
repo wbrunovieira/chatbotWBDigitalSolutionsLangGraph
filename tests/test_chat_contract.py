@@ -146,6 +146,23 @@ class TestFrontendContract:
         assert state["behavior"]["pages_visited"] == ["/", "/pricing"]
         assert state["behavior"]["geo_country"] == "BR"
 
+    async def test_malformed_behavior_never_422s_the_chat(self, client, graph_calls):
+        # Optional enrichment must never break the core chat: numeric pages, numeric geo,
+        # wrong types get coerced/dropped, not rejected.
+        resp = await post(client, {**VALID_PAYLOAD, "behavior": {
+            "pages_visited": [123, "/pricing", None], "journey_score": "oops", "geo_country": 55,
+        }})
+        assert resp.status_code == 200
+        beh = graph_calls[0]["behavior"]
+        assert beh["pages_visited"] == ["123", "/pricing"]  # coerced to str, null dropped
+        assert beh["geo_country"] == "55"
+        assert beh.get("journey_score") is None  # non-numeric dropped
+
+    async def test_behavior_that_is_not_an_object_is_dropped(self, client, graph_calls):
+        resp = await post(client, {**VALID_PAYLOAD, "behavior": "garbage"})
+        assert resp.status_code == 200
+        assert graph_calls[0]["behavior"] is None
+
     async def test_numeric_timestamp_is_accepted(self, client):
         # Some widget builds send Date.now() instead of an ISO string; a strict `str`
         # field would 422 those and break the chat.

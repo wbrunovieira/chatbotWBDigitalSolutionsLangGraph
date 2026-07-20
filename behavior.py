@@ -50,7 +50,8 @@ def summarize_behavior(behavior: Optional[dict]) -> str:
     parts = []
     pages = _pages(behavior)
     if pages:
-        shown = ", ".join(pages[:8])
+        # Truncate each path so one very long URL can't bloat the CRM description / prompt.
+        shown = ", ".join(p[:120] for p in pages[:8])
         more = f" (+{len(pages) - 8} more)" if len(pages) > 8 else ""
         parts.append(f"visited {len(pages)} pages: {shown}{more}")
     geo = behavior.get("geo_country")

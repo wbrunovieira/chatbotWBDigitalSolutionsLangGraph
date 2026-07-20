@@ -180,6 +180,32 @@ class ChatRequest(BaseModel):
             )
         return data
 
+    @field_validator("behavior", mode="before")
+    @classmethod
+    def lenient_behavior(cls, value: Any) -> Any:
+        # Optional enrichment must NEVER 422 the chat. Pydantic v2 doesn't cascade the
+        # parent's coerce_numbers_to_str into nested models, so a numeric page or geo from
+        # a frontend serialization bug would fail validation and take the whole request
+        # down. Coerce leniently here and drop anything malformed to None.
+        if value is None or isinstance(value, BehaviorContext):
+            return value
+        if not isinstance(value, dict):
+            return None
+        try:
+            cleaned: dict[str, Any] = {}
+            pages = value.get("pages_visited")
+            if isinstance(pages, list):
+                cleaned["pages_visited"] = [str(p) for p in pages if p is not None][:50]
+            journey = value.get("journey_score")
+            if isinstance(journey, (int, float)) and not isinstance(journey, bool):
+                cleaned["journey_score"] = float(journey)
+            geo = value.get("geo_country")
+            if geo is not None:
+                cleaned["geo_country"] = str(geo)[:8]
+            return cleaned
+        except Exception:  # noqa: BLE001 — enrichment is best-effort; never break chat
+            return None
+
     @field_validator("message")
     @classmethod
     def validate_message(cls, value: str) -> str:

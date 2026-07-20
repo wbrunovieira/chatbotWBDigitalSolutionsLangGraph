@@ -155,6 +155,9 @@ async def create_lead(args: CreateLeadArgs) -> dict:
     description = args.description
     if behavior_summary:
         description = f"{description}\n\n[lead score: {lead_score}/100] {behavior_summary}".strip()
+    # Re-bound after enrichment: CreateLeadArgs caps description at 4000, but we append the
+    # summary AFTER validation, so clamp again or a near-limit description could 422 the CRM.
+    description = description[:4000]
 
     payload: dict[str, Any] = {
         "businessName": args.business_name,
