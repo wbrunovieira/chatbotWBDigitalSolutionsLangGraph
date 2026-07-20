@@ -36,6 +36,15 @@ REDIS_DB = int(os.getenv("REDIS_DB", 0))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 REDIS_CACHE_EXPIRE_SECONDS = 604800  # 7 dias
 
+# Semantic cache (#12): an embedding-similarity layer in front of the exact-match cache so
+# paraphrases of an already-answered question hit without a new LLM call. Only applied to
+# shared/anon users (context-free, user-independent turns) — logged-in users with memory
+# skip it so a paraphrase can't bypass their conversation. High threshold to avoid serving
+# a near-but-wrong answer; bounded per (language, page) bucket.
+SEMANTIC_CACHE_ENABLED = os.getenv("SEMANTIC_CACHE_ENABLED", "true").lower() == "true"
+SEMANTIC_CACHE_THRESHOLD = float(os.getenv("SEMANTIC_CACHE_THRESHOLD", "0.92"))
+SEMANTIC_CACHE_MAX_ENTRIES = int(os.getenv("SEMANTIC_CACHE_MAX_ENTRIES", "50"))
+
 # Runtime environment. Anything other than "production" is treated as dev.
 APP_ENV = os.getenv("APP_ENV", "development")
 IS_PRODUCTION = APP_ENV == "production"

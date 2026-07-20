@@ -283,6 +283,46 @@ class TestSpendCap:
         assert len(graph_calls) == 2, "a different user must not get another user's cached answer"
 
 
+class TestSemanticCache:
+    """#12: a paraphrase from an anon user is served from the semantic cache; a logged-in
+    user (with memory) skips it so a paraphrase can't bypass their conversation."""
+
+    @staticmethod
+    def _fake_embed(text):
+        # Two phrasings that both mention 'site' map to the same vector; anything else differs.
+        return [1.0, 0.0] if "site" in text.lower() else [0.0, 1.0]
+
+    async def test_paraphrase_hits_semantic_cache_for_anon(self, client, graph_calls, monkeypatch):
+        monkeypatch.setattr(main, "compute_embedding", self._fake_embed)
+
+        first = await post(client, {"message": "quero um site", "user_id": "anon"})
+        assert first.status_code == 200 and len(graph_calls) == 1
+
+        # Different wording, same meaning (both contain 'site') -> exact-cache miss, semantic hit.
+        second = await post(client, {"message": "preciso de um site novo", "user_id": "anon"})
+        body = second.json()
+        assert body["cached"] is True and body["cache_type"] == "semantic"
+        assert len(graph_calls) == 1, "a semantic hit must not re-run the graph"
+
+    async def test_embedding_failure_degrades_to_graph(self, client, graph_calls, monkeypatch):
+        # The semantic cache is an optimization: if embedding blows up, the chat still works.
+        def boom(_text):
+            raise RuntimeError("embedding model unavailable")
+
+        monkeypatch.setattr(main, "compute_embedding", boom)
+        resp = await post(client, {"message": "quero um site", "user_id": "anon"})
+        assert resp.status_code == 200
+        assert len(graph_calls) == 1  # fell through to the graph
+
+    async def test_logged_in_user_skips_semantic_cache(self, client, graph_calls, monkeypatch):
+        monkeypatch.setattr(main, "compute_embedding", self._fake_embed)
+
+        await post(client, {"message": "quero um site", "user_id": "user-42"})
+        second = await post(client, {"message": "preciso de um site novo", "user_id": "user-42"})
+        assert second.json()["cached"] is False
+        assert len(graph_calls) == 2, "logged-in users must not get a paraphrase's cached answer"
+
+
 class TestHandleChatHelpers:
     def test_page_context_maps_known_pages_blog_and_default(self):
         assert "automação" in main._page_context("/automation")
