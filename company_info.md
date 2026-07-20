@@ -1,10 +1,15 @@
 ## WB Digital Solutions
 
 - **Founded:** January 15, 2023.
-- **Specializations:** Custom websites, business automation,
+- **Specializations:** Custom websites, custom platforms &
+  systems (SaaS and internal software), business automation,
   and AI-driven solutions.
 - **Mission:** Deliver innovative digital solutions focused
   on performance and results.
+- **Team & reach:** Founded and led by Bruno (Brazilian,
+  working as a digital nomad), with a lean, senior team. We
+  work fully remotely with clients worldwide and serve
+  customers in Portuguese, English, Spanish, and Italian.
 
 ---
 
@@ -86,6 +91,124 @@
 - Optimization models for logistics, scheduling, and
   resource allocation.
 
+### Platforms & Systems (SaaS, Internal Systems, Custom Software)
+
+- Custom software built to fit the business — from SaaS
+  platforms to bespoke internal systems — using the right
+  technology stack for each challenge.
+- Robust, scalable, and secure by design: built to handle
+  demanding workloads, grow with the business, and protect
+  data and system integrity.
+- Typical builds: multi-tenant SaaS products, internal and
+  admin systems, dashboards and back-offices, CRMs,
+  project-management and finance tools, marketplaces, and
+  desktop applications.
+- End-to-end delivery: architecture, development,
+  integrations (payments, third-party APIs, AI features),
+  authentication, and deployment.
+
+---
+
+## Portfolio & Case Studies
+
+Real projects WB Digital Solutions has designed and built —
+proof of capability across websites, platforms/systems,
+e-commerce, and AI.
+
+### Platforms & Systems (built by WB)
+
+- **WB CRM** — enterprise sales CRM: lead management,
+  pipeline kanban, email/WhatsApp campaigns, AI-powered call
+  analysis, and proposal generation.
+- **WB Project Manager** — Linear/Jira-style project tool:
+  workspaces, kanban boards, time tracking, command palette.
+- **Finanças** — personal finance & investment platform:
+  accounts, budgeting, crypto portfolio, stock screener,
+  live market data.
+- **Calendar** — productivity app: recurring events, habit
+  tracking, weekly/monthly goals, Google Calendar sync.
+- **Konnen** — physical-assessment app: student
+  registration, performance tests, heart-zone and VO₂max
+  analysis, PDF reports.
+- **Vetor** — Tauri desktop app interpreting Brazilian tax
+  files, with device-based licensing and a NestJS backend.
+
+### AI (built by WB)
+
+- **AI Agents (Agentes de IA)** — multi-agent orchestration
+  with LangGraph, routing user intents to specialized CRM
+  and finance agents.
+
+### Websites & E-commerce (built by WB)
+
+- **Revalida Itália** — custom teaching/education platform
+  (Next.js, NestJS, PostgreSQL, cloud).
+- **Flávia Guedes** — beauty-services site with gift-card
+  e-commerce, pre-paid credit, dual payment processors,
+  admin panel, multilingual.
+- **Stylos** — e-commerce store: product variants,
+  persistent cart, MercadoPago, freight calculation, admin
+  panel.
+- **Manon Ruivo** — trilingual consulting site with a
+  manageable blog and GSAP-animated immersive experience.
+- **Kundalini Activation** — conversion-focused site with
+  gallery, videos, testimonials, and a client CMS panel.
+- **Salto** — multilingual site with protected sales decks,
+  briefing forms, and automated PDF/email order generation.
+- **Salão Loha** — beauty-salon marketing site with
+  portfolio lightbox and animated calendar.
+
+---
+
+## How We Work (Process, Pricing, Timelines, Support)
+
+### Approach & Process
+
+- Every project starts by understanding the client's need
+  and goals.
+- We work with an Agile methodology, keeping the client
+  continuously informed of progress.
+- Flexible engagement: payment terms are negotiable and we
+  can work with virtually any type of contract, tailored to
+  the client.
+
+### Pricing & Value
+
+- We don't quote prices or ranges up front: the real cost
+  depends on several variables, and a premature number can
+  give the wrong idea of value — so exact pricing always
+  comes after a short conversation about the scope.
+- Quality is always the priority; and thanks to a lean
+  structure, our pricing is very competitive.
+
+### Timelines
+
+- Timelines vary with the complexity of the project and our
+  current workload — some builds are fast, others take
+  longer. We confirm a realistic timeline after
+  understanding the scope. This applies to websites,
+  platforms/systems (SaaS), automation, and AI projects.
+
+### Support, Hosting & Maintenance
+
+- We can keep helping after launch with ongoing maintenance
+  and hosting.
+- Response time / SLA is agreed up front according to how
+  business-critical the system is for the client.
+
+### Ownership, Confidentiality & Guarantees
+
+- Code ownership, NDAs / confidentiality, revisions, and
+  guarantees can all be agreed as part of the engagement —
+  just ask.
+
+### Industries
+
+- Our portfolio spans education, health and fitness, beauty,
+  finance, professional services, and e-commerce, among
+  others. We are always open to new sectors — a new industry
+  is never a problem.
+
 ---
 
 ## Comparison: Generic vs. Custom Solutions
@@ -136,8 +259,10 @@
 ### Web Development
 
 - **How long does it take to build a custom website?**  
-  Typically between 4-12 weeks, depending on project
-  complexity.
+  It varies with the project's complexity and our current
+  workload — some are fast, others take longer. A common
+  range is 4-12 weeks, but we confirm a realistic timeline
+  once we understand the scope.
 
 - **What makes your websites secure?**  
   We use Kubernetes, Rust, and other modern tools to ensure
@@ -165,6 +290,26 @@
 - **Is AI suitable for smaller businesses?**  
   Absolutely, AI can significantly enhance operations for
   businesses of all sizes.
+
+### Platforms & Systems
+
+- **Do you build custom systems or SaaS platforms?**  
+  Yes — from SaaS products to bespoke internal systems and
+  admin back-offices, built robust, scalable, and secure
+  with the right stack for each challenge.
+
+- **Can you build a CRM or a project-management tool?**  
+  Yes. We built our own WB CRM and WB Project Manager, plus
+  finance, productivity, and assessment systems — see the
+  portfolio and case studies.
+
+### Portfolio
+
+- **Can you show examples of what you've built?**  
+  Yes — our portfolio includes CRMs, project and finance
+  tools, e-commerce stores, education platforms, and AI
+  agent systems. Ask about a specific type and we'll share
+  the closest case study.
 
 **How Long Does It Take to Build a Custom Website?**
 
@@ -218,8 +363,11 @@ directly.
   and multilingual capabilities.
 
 - **What are the typical costs for projects?**  
-  Costs vary based on complexity and scope. Please contact
-  us directly for a tailored estimate.
+  Costs depend on several variables, so a premature number
+  can be misleading — exact pricing comes after a short
+  conversation about your scope. Quality is always our
+  priority, and our lean structure keeps pricing very
+  competitive.
 
 - **Do you offer website hosting services?**  
   We provide hosting recommendations or manage hosting
@@ -246,6 +394,16 @@ directly.
 - **Can I start small and expand later?**  
   Yes, our solutions are designed for scalability, allowing
   you to start with a smaller scope and expand as needed.
+
+## Blog & Resources
+
+WB publishes practical guides for business owners. Recent
+topics include: AI agents for business, whether your
+business needs a website, how emotional design drives
+results, how going digital transforms a company, ChatGPT
+for SMEs, and how to increase SME sales.
+
+---
 
 ## Security Guidelines for Chatbot Interactions
 

@@ -6,3 +6,5 @@
 {"question": "Vocês fazem otimização de SEO nos sites?", "must_include": ["SEO"], "language": "pt-BR"}
 {"question": "What machine learning models can you build?", "must_include": ["fraud", "forecasting"], "language": "en"}
 {"question": "Qual é a missão da WB Digital Solutions?", "must_include": ["performance"], "language": "pt-BR"}
+{"question": "Do you build custom SaaS platforms or internal systems?", "must_include": ["SaaS"], "language": "en"}
+{"question": "Have you built a CRM before?", "must_include": ["CRM"], "language": "en"}
