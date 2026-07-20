@@ -57,7 +57,7 @@ This is a real, in-production conversational agent — not a tutorial wrapper ar
 
 ## Architecture
 
-A request flows through a compiled **LangGraph** `StateGraph`. The entry node classifies the user's intent, then a conditional router decides the path: greetings and off-topic messages short-circuit to a cheap canned-style response, direct service questions take a **fast track** that skips retrieval, and everything else runs the full RAG pipeline before generating, self-revising, and logging the answer.
+A request flows through a compiled **LangGraph** `StateGraph`. The entry node classifies the user's intent, then a conditional router decides the path: greetings and off-topic messages short-circuit to a cheap canned-style response, a `chat_with_agent` intent ends the graph so the frontend can hand off to a human, and **every other intent runs the full RAG pipeline** (retrieve → augment → generate → self-revise → log).
 
 ```mermaid
 flowchart TD
@@ -66,12 +66,11 @@ flowchart TD
     R -- miss --> I[intent_detection]
     I -->|greeting| G[generate_greeting_response]
     I -->|off_topic| O[generate_off_topic_response]
-    I -->|chat_with_agent / schedule_meeting| END1[(END · handoff)]
-    I -->|fast_track| RG[response_generation]
-    I -->|normal| C[retrieve_company_context]
+    I -->|chat_with_agent| END1[(END · handoff)]
+    I -->|else| C[retrieve_company_context]
     C --> U[retrieve_user_context]
     U --> AQ[augment_query]
-    AQ --> RG
+    AQ --> RG[response_generation]
     RG --> RV[response_revision]
     G --> L[log_saving]
     O --> L
@@ -83,7 +82,7 @@ flowchart TD
 
 | Node | Responsibility |
 |------|----------------|
-| `intent_detection` | Classifies the message (greeting / off-topic / direct question / agent handoff / schedule) via DeepSeek; sets `fast_track`. |
+| `intent_detection` | Classifies the message (greeting / off-topic / service question / quote / share-contact / agent handoff) via DeepSeek; sets `intent`, which the conditional router keys on. |
 | `retrieve_company_context` | RAG: embeds the query and does **top-k retrieval** over the chunked `company_info` collection, keeps hits above a score threshold, and attaches the source chunks to the Langfuse trace as citations. |
 | `retrieve_user_context` | Pulls prior conversation turns from the Qdrant `chat_logs` collection (long-term memory). |
 | `augment_query` | Fuses the user query with retrieved company + user context into a grounded prompt. |
@@ -93,7 +92,7 @@ flowchart TD
 
 ## Tech stack
 
-- **Orchestration:** LangGraph `StateGraph` (LangChain 0.3) with conditional routing + fast-track paths.
+- **Orchestration:** LangGraph `StateGraph` (LangChain 0.3) with intent-based conditional routing.
 - **API:** FastAPI + Uvicorn behind an nginx reverse proxy, strict CORS allowlist, `/health` + `/chat` endpoints.
 - **Abuse & cost controls:** per-IP rate limiting + a daily spend circuit-breaker (both Redis-backed), request-size caps, and an admin-token-gated `/usage-report`. See [Security](#security--abuse-controls).
 - **LLM:** DeepSeek (`deepseek-v4-flash`) over the OpenAI-compatible REST API.
@@ -245,7 +244,7 @@ docs/                API, deployment and optimization documentation
 
 ## Engineering highlights
 
-- **Graph-structured, not prompt-spaghetti** — routing and fast-tracking are explicit edges, so behavior is inspectable and each node is unit-tested (`experiments/`).
+- **Graph-structured, not prompt-spaghetti** — intent routing is explicit edges, so behavior is inspectable and each node is unit-tested.
 - **RAG + persistent memory** — company knowledge and past conversations are both vector-retrieved, so answers are grounded and context-aware across sessions.
 - **Production observability** — every turn is traced and scored in Langfuse, and prompts are versioned there rather than hard-coded.
 - **Cost-aware by design** — Redis short-circuiting + the DeepSeek optimizer cut redundant LLM spend, and a daily spend circuit-breaker caps worst-case cost under abuse. The model/embedding trade-offs (DeepSeek over frontier models, ONNX embeddings over PyTorch) are written down in [ADR 0001](docs/adr/0001-model-and-embedding-choices.md).

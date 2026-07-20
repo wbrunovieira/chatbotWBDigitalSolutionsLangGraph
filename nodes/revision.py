@@ -75,10 +75,11 @@ async def revise_response(state: dict) -> dict:
             temperature=0.5,
             extra_headers=optimization_headers,
         )
-    except httpx.ReadTimeout:
-        # Revision is optional polish — on timeout, keep the already-generated answer
-        # (returning an English error string would replace a good reply with a bad one).
-        logging.error("revise_response: DeepSeek timed out; keeping the original answer")
+    except httpx.HTTPError as exc:
+        # Revision is optional polish — on ANY transport error (timeout, connect, protocol),
+        # keep the already-generated answer. Must NOT be ReadTimeout-only: a ConnectError here
+        # would otherwise 500 the request and throw away a good reply that was ready to send.
+        logging.error("revise_response: DeepSeek call failed (%s); keeping the original answer", exc)
         return _keep_original(state)
 
     # Parse + extract, all guarded. ANY failure — a non-JSON gateway body (502 HTML ->
