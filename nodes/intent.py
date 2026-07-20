@@ -117,7 +117,7 @@ Respond with ONLY JSON: {{"intent": "<greeting|request_quote|inquire_services|sh
         generation = langfuse_client.start_llm_generation(
             trace=trace,
             name="detect_intent",
-            model="deepseek-chat",
+            model="deepseek-v4-flash",
             input_messages=[{"role": "user", "content": prompt}],
             metadata={"temperature": 0.1},
             prompt=intent_prompt,

@@ -75,7 +75,7 @@ DeepSeek offers 50% discount 16:30-00:30 UTC (13:30-21:30 Brazil time). The opti
 | Qdrant collections | `company_info`, `chat_logs` | `main.py` |
 | Redis cache TTL | 604800s (7 days) | `config.py:20` |
 | Response max length | 500 chars (revision) | `nodes.py:348` |
-| DeepSeek model | `deepseek-chat` | `nodes.py` |
+| DeepSeek model | `deepseek-v4-flash` | `nodes.py` |
 | API timeout | 30 seconds | `nodes.py` |
 
 ### API Endpoints

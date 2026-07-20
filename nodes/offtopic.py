@@ -34,7 +34,7 @@ async def generate_off_topic_response(state: dict) -> dict:
         generation = langfuse_client.start_llm_generation(
             trace=trace,
             name="generate_off_topic",
-            model="deepseek-chat",
+            model="deepseek-v4-flash",
             input_messages=[{"role": "user", "content": prompt}],
             metadata={"temperature": 0.7},
             prompt=off_topic_prompt,

@@ -25,7 +25,7 @@ from tools import TOOL_SPECS  # noqa: E402
 
 def picked_tool(message: str):
     body = {
-        "model": "deepseek-chat",  # floating vendor pointer — weights can change server-side
+        "model": "deepseek-v4-flash",  # floating vendor pointer — weights can change server-side
         "messages": [
             {"role": "system", "content": TOOL_SYSTEM_PROMPT},
             {"role": "user", "content": message},

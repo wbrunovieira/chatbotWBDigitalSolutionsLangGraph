@@ -49,17 +49,20 @@ def get_request_cost() -> float:
 class DeepSeekOptimizer:
     """Gerencia otimizações de custo para API DeepSeek"""
     
-    # Preços por 1M tokens (em USD)
+    # Prices per 1M tokens (USD), for deepseek-v4-flash (the model we use). DeepSeek dropped
+    # the old off-peak discount for V4, so the "discount" tier now equals "standard" — the
+    # is_discount_time()/report plumbing is kept but no longer changes the price. Update these
+    # if the model or vendor pricing changes.
     PRICING = {
         "standard": {
-            "input_cache_hit": 0.07,
-            "input_cache_miss": 0.27,
-            "output": 1.10
+            "input_cache_hit": 0.0028,
+            "input_cache_miss": 0.14,
+            "output": 0.28
         },
-        "discount": {  # 16:30-00:30 UTC
-            "input_cache_hit": 0.035,
-            "input_cache_miss": 0.135,
-            "output": 0.55
+        "discount": {  # no off-peak discount on V4 — same as standard
+            "input_cache_hit": 0.0028,
+            "input_cache_miss": 0.14,
+            "output": 0.28
         }
     }
     

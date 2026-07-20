@@ -96,7 +96,7 @@ flowchart TD
 - **Orchestration:** LangGraph `StateGraph` (LangChain 0.3) with conditional routing + fast-track paths.
 - **API:** FastAPI + Uvicorn behind an nginx reverse proxy, strict CORS allowlist, `/health` + `/chat` endpoints.
 - **Abuse & cost controls:** per-IP rate limiting + a daily spend circuit-breaker (both Redis-backed), request-size caps, and an admin-token-gated `/usage-report`. See [Security](#security--abuse-controls).
-- **LLM:** DeepSeek (`deepseek-chat`) over the OpenAI-compatible REST API.
+- **LLM:** DeepSeek (`deepseek-v4-flash`) over the OpenAI-compatible REST API.
 - **Embeddings:** FastEmbed (ONNX `all-MiniLM-L6-v2`) — **no PyTorch**, keeping the image lightweight.
 - **Vector DB / RAG + memory:** Qdrant — the `company_info` knowledge base is chunked (heading-aware) and ingested idempotently at startup ([`ingest.py`](ingest.py)) for top-k retrieval, plus `chat_logs` conversation history.
 - **Caching:** Redis exact-match cache (7-day TTL, keyed by `sha256(message + language + page)`) to skip the graph entirely on repeats.

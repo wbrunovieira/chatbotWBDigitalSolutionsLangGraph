@@ -39,7 +39,7 @@ _REFUSAL_MARKERS = [
 
 def raw_reply(message: str) -> str:
     body = {
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-flash",
         "messages": [
             {"role": "system", "content": HARDENED},
             {"role": "user", "content": message},

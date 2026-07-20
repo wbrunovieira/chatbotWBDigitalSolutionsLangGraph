@@ -62,7 +62,7 @@ def _answer_from_context(question: str, context: str, language: str) -> str:
         f"Context:\n{context}\n\nQuestion: {question}"
     )
     data = _deepseek.chat({
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-flash",
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0,
     })
@@ -77,7 +77,7 @@ def _is_faithful(question: str, context: str, answer: str) -> bool:
         'Reply ONLY with JSON: {"grounded": true|false}.'
     )
     data = _deepseek.chat({
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-flash",
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0,
         "response_format": {"type": "json_object"},

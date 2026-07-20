@@ -35,7 +35,7 @@ def _answer(question: str, language: str) -> str:
         f"User question: {question}\n\nAnswer helpfully in 1-2 sentences."
     )
     data = _deepseek.chat({
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-flash",
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0,
     })
@@ -48,7 +48,7 @@ def _detected_language(text: str) -> str:
         '{"language": "<English|Spanish|Italian|Portuguese|Other>"}.\n\n' + text
     )
     data = _deepseek.chat({
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-flash",
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0,
         "response_format": {"type": "json_object"},

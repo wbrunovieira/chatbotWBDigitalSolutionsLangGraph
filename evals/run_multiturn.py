@@ -29,7 +29,7 @@ from tools import TOOL_SPECS  # noqa: E402
 
 def _pick_tool(messages: list):
     body = {
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-flash",
         "messages": messages,
         "tools": TOOL_SPECS,
         "tool_choice": "auto",

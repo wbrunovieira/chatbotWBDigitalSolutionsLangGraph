@@ -14,7 +14,9 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 # DeepSeek's OpenAI-compatible endpoint + model. Centralized here (were hardcoded at every
 # call site) so a provider/model swap is a one-place change — see deepseek_client.py.
 DEEPSEEK_API_URL = os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com/v1/chat/completions")
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+# deepseek-v4-flash: the current cheap/fast model (cache-miss $0.14/1M in, $0.28/1M out).
+# The legacy alias "deepseek-chat" was DEPRECATED on 2026-07-24, so use the explicit id.
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
 
 # Model routing (#13, see llm.py): a cheap/fast model for classification (intent) and a
 # stronger one for generation/revision. Both default to DEEPSEEK_MODEL, so the routing seam

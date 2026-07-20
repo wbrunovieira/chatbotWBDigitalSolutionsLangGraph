@@ -23,7 +23,7 @@ Chatbot inteligente para WB Digital Solutions que oferece atendimento automatiza
 
 ### Tecnologias Principais
 - **Backend**: FastAPI (Python 3.11)
-- **IA/LLM**: DeepSeek API (deepseek-chat)
+- **IA/LLM**: DeepSeek API (deepseek-v4-flash)
 - **Orquestração**: LangGraph (state machine)
 - **Vector DB**: Qdrant Cloud
 - **Cache**: Redis + Cache Local
@@ -283,7 +283,7 @@ StateGraph(WorkflowState) → {
 
 ### 1. DeepSeek API
 **Endpoint**: `https://api.deepseek.com/v1/chat/completions`
-**Modelo**: `deepseek-chat`
+**Modelo**: `deepseek-v4-flash`
 **Usos**:
 - Intent detection (temperature: 0.1)
 - Response generation (temperature: 0.7)
