@@ -34,6 +34,7 @@ from security import enforce_chat_limits, record_spend, get_spend_snapshot
 import tools
 import guardrails
 import llm
+import analytics
 from language import resolve_language
 from langfuse_client import create_trace, update_trace, flush_langfuse, evaluate_response, score_trace, set_current_trace
 
@@ -621,4 +622,15 @@ async def get_usage_report(_: None = Depends(require_admin)):
         "spend": await get_spend_snapshot(),
         "message": f"{'🎉 Desconto de 50% ATIVO!' if report['current_discount'] else '⚠️ Fora do horário de desconto'}"
     }
+
+
+@app.get("/analytics/funnel")
+async def analytics_funnel(window_days: int = 30, _: None = Depends(require_admin)):
+    """Conversion funnel (greeting → question → lead) from chat_logs (#24). Operator-only.
+
+    Langfuse is off in prod, so this reads the Qdrant chat_logs directly. The scroll is sync
+    and can page a lot of points, so it runs in a thread to avoid blocking the event loop.
+    """
+    window = window_days if window_days > 0 else None
+    return await asyncio.to_thread(analytics.conversion_funnel, get_qdrant_client(), window)
 
