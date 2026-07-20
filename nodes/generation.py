@@ -14,6 +14,21 @@ from config import MAX_HISTORY_MESSAGES
 from deepseek_optimizer import DeepSeekOptimizer
 
 
+# Per-language answer instruction (#23). Emphatic ("ONLY", "regardless of the context")
+# because the knowledge base is in English — without this a pt/es/it question tends to drift
+# into an English answer. Exported so the language-consistency eval guards this exact string.
+LANGUAGE_INSTRUCTIONS = {
+    "en": "IMPORTANT: Reply ONLY in English, regardless of the language of the context or examples.",
+    "es": "IMPORTANTE: Responde SOLO en español, sin importar el idioma del contexto o de los ejemplos.",
+    "it": "IMPORTANTE: Rispondi SOLO in italiano, indipendentemente dalla lingua del contesto o degli esempi.",
+    "pt-BR": "IMPORTANTE: Responda SOMENTE em português brasileiro, independentemente do idioma do contexto ou dos exemplos.",
+}
+
+
+def language_instruction_for(language: str) -> str:
+    return LANGUAGE_INSTRUCTIONS.get(language, LANGUAGE_INSTRUCTIONS["pt-BR"])
+
+
 async def augment_query(state: dict) -> dict:
     """
     Prepara o contexto para geração de resposta usando prompt do Langfuse.
@@ -26,14 +41,8 @@ async def augment_query(state: dict) -> dict:
     current_page = state.get("current_page", "/")
     intent = state.get("intent", "inquire_services")
 
-    # Determinar instrução de idioma
-    language_instructions = {
-        "en": "IMPORTANT: Respond in English.",
-        "es": "IMPORTANTE: Responde en español.",
-        "it": "IMPORTANTE: Rispondi in italiano.",
-        "pt-BR": "IMPORTANTE: Responda em português brasileiro.",
-    }
-    language_instruction = language_instructions.get(language, language_instructions["pt-BR"])
+    # Determinar instrução de idioma (#23 — single source, exported + eval-guarded)
+    language_instruction = language_instruction_for(language)
 
     # Contexto da página
     page_contexts = {

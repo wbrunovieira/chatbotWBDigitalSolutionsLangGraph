@@ -67,3 +67,5 @@ jobs:
         run: python evals/run_rag.py --recall-threshold 0.8 --faithfulness-threshold 0.9
       - name: Multi-turn eval (lead-capture happy path across turns)
         run: python evals/run_multiturn.py --threshold 0.75
+      - name: Per-language answer consistency eval (gate >= 90%)
+        run: python evals/run_language.py --threshold 0.9

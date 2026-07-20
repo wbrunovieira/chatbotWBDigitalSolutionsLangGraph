@@ -22,12 +22,14 @@ from nodes import (  # noqa: F401
 )
 from nodes.embeddings import EMBEDDING_MODEL_NAME, compute_embedding, get_embedding_model
 from nodes.generation import (
+    LANGUAGE_INSTRUCTIONS,
     TOOL_SYSTEM_PROMPT,
     _deepseek_chat,
     _run_tool_loop,
     augment_query,
     build_llm_messages,
     generate_response,
+    language_instruction_for,
 )
 from nodes.greeting import GREETINGS, generate_greeting_response
 from nodes.intent import (
