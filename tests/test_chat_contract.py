@@ -135,6 +135,17 @@ class TestFrontendContract:
         assert state["language"] == "pt-BR"
         assert state["current_page"] == "/"
 
+    async def test_behavior_context_is_optional_and_defaults_none(self, client, graph_calls):
+        await post(client, {"message": "oi"})
+        assert graph_calls[0]["behavior"] is None
+
+    async def test_behavior_context_reaches_the_graph(self, client, graph_calls):
+        await post(client, {**VALID_PAYLOAD,
+                            "behavior": {"pages_visited": ["/", "/pricing"], "geo_country": "BR"}})
+        state = graph_calls[0]
+        assert state["behavior"]["pages_visited"] == ["/", "/pricing"]
+        assert state["behavior"]["geo_country"] == "BR"
+
     async def test_numeric_timestamp_is_accepted(self, client):
         # Some widget builds send Date.now() instead of an ISO string; a strict `str`
         # field would 422 those and break the chat.

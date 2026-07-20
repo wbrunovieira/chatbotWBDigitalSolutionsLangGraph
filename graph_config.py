@@ -29,6 +29,7 @@ class ChatState(TypedDict, total=False):
     language: str
     current_page: str
     page_context: str
+    behavior: dict
     messages: List[dict]
     memory: dict
     metadata: dict

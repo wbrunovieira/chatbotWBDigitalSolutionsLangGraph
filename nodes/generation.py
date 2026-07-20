@@ -4,6 +4,7 @@ import httpx
 import json
 import logging
 
+import behavior as behavior_ctx
 import deepseek_client
 import guardrails
 import langfuse_client
@@ -193,8 +194,14 @@ async def generate_response(state: dict) -> dict:
     # replayed for short-term memory. The current turn is sent AUGMENTED (with RAG context);
     # only the RAW user text is persisted, so past turns don't carry stale retrieval context.
     history = state.get("messages", [])
+    # Light personalization (#8b): if the frontend sent behavioral context, add an INTERNAL
+    # hint so the model tailors the answer — the hint itself forbids revealing we track.
+    system_prompt = guardrails.harden_system_prompt(TOOL_SYSTEM_PROMPT)
+    hint = behavior_ctx.personalization_hint(state.get("behavior"))
+    if hint:
+        system_prompt = f"{system_prompt}\n\n{hint}"
     llm_messages = (
-        [{"role": "system", "content": guardrails.harden_system_prompt(TOOL_SYSTEM_PROMPT)}]
+        [{"role": "system", "content": system_prompt}]
         + history
         + [{"role": "user", "content": query}]
     )

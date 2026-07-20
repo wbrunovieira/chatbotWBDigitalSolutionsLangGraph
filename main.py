@@ -119,6 +119,19 @@ async def require_admin(authorization: str = Header(default="")) -> None:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
+class BehaviorContext(BaseModel):
+    """Optional engagement signal the Next.js server may attach (#8b): where the visitor has
+    been and how far into the journey they are. Used to score/enrich the lead and lightly
+    personalize the answer — never shown to the user. All fields optional so it's contract-safe.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    pages_visited: list[str] = Field(default_factory=list, max_length=50)
+    journey_score: float | None = None
+    geo_country: str | None = Field(default=None, max_length=8)
+
+
 class ChatRequest(BaseModel):
     """
     The payload the site widget posts. Field names and defaults ARE the contract with
@@ -135,6 +148,7 @@ class ChatRequest(BaseModel):
     message: str
     user_id: str = Field(default="anon", max_length=128)
     language: str = Field(default="pt-BR", max_length=16)
+    behavior: BehaviorContext | None = None
     current_page: str = Field(default="/", max_length=256)
     page_url: str = Field(default="", max_length=2048)
     timestamp: Any = ""
@@ -219,6 +233,7 @@ async def chat(payload: ChatRequest, client_ip: str = Depends(enforce_chat_limit
     # the daily budget is spent. Being here means the request is allowed to cost money.
     begin_request_cost()
     tools.set_client_ip(client_ip)  # so create_lead can enforce a per-IP lead cap
+    tools.set_behavior(payload.behavior)  # so create_lead can score/enrich the lead (#8b)
     try:
         return await _handle_chat(payload)
     finally:
@@ -253,6 +268,7 @@ def _build_state(payload: ChatRequest, page_context: str) -> dict:
         "language": payload.language,
         "current_page": payload.current_page,
         "page_context": page_context,
+        "behavior": payload.behavior.model_dump() if payload.behavior else None,
         "memory": {},
         "metadata": {
             "page_url": payload.page_url,

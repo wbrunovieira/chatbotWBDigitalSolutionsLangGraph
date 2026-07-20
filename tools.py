@@ -23,6 +23,7 @@ from typing import Any, Awaitable, Callable, Optional
 import httpx
 from pydantic import BaseModel, Field, field_validator
 
+import behavior as behavior_ctx
 import guardrails
 
 import config
@@ -46,6 +47,15 @@ _client_ip: contextvars.ContextVar = contextvars.ContextVar("tool_client_ip", de
 
 def set_client_ip(ip: str) -> None:
     _client_ip.set(ip or "unknown")
+
+
+# The request's optional behavioral context (#8b), bound per request so create_lead can
+# score + enrich the lead regardless of what the model passed as tool args.
+_behavior: contextvars.ContextVar = contextvars.ContextVar("tool_behavior", default=None)
+
+
+def set_behavior(value: Optional[dict]) -> None:
+    _behavior.set(behavior_ctx.as_dict(value))
 
 
 async def _lead_quota_ok() -> bool:
@@ -136,9 +146,19 @@ async def create_lead(args: CreateLeadArgs) -> dict:
             "data": {"skipped": "quota"},
         }
 
+    # Behavioral enrichment (#8b): score the lead by journey depth and fold a compact
+    # summary into the description. Kept inside `description` (not new top-level fields) so
+    # the CRM contract stays stable. Absent when the frontend sends no behavior.
+    behavior = _behavior.get()
+    lead_score = behavior_ctx.score_lead(behavior)
+    behavior_summary = behavior_ctx.summarize_behavior(behavior)
+    description = args.description
+    if behavior_summary:
+        description = f"{description}\n\n[lead score: {lead_score}/100] {behavior_summary}".strip()
+
     payload: dict[str, Any] = {
         "businessName": args.business_name,
-        "description": args.description,
+        "description": description,
         "source": "chatbot",
         "sourceGroup": config.LEAD_SOURCE_GROUP,
         "isProspect": False,
@@ -164,7 +184,10 @@ async def create_lead(args: CreateLeadArgs) -> dict:
 
     # Fire-and-forget so a slow notify can never extend the tool's timed window (which,
     # after a successful POST, could otherwise trigger a retry and a DUPLICATE lead).
-    _fire_and_forget(_notify_team_whatsapp(f"🤖 Novo lead do chatbot: {args.business_name}\n{args.description[:300]}"))
+    notify = f"🤖 Novo lead do chatbot: {args.business_name}\n{args.description[:300]}"
+    if behavior_summary:
+        notify += f"\n📊 Lead score: {lead_score}/100 — {behavior_summary}"
+    _fire_and_forget(_notify_team_whatsapp(notify))
     return {
         "ok": True,
         "message": "Perfeito, registrei seu contato — nosso time já vai te procurar! 😊",

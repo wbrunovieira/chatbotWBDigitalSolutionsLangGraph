@@ -60,6 +60,7 @@ def fake_http(monkeypatch, redis_fake):  # redis_fake: create_lead's per-IP quot
     # Evolution unset -> notify is a no-op
     for k in ("EVOLUTION_API_URL", "EVOLUTION_API_KEY", "EVOLUTION_INSTANCE", "MY_WHATSAPP_NUMBER"):
         monkeypatch.setattr(config, k, "")
+    tools.set_behavior(None)  # clean per-request behavioral context between tests
     return FakeAsyncClient
 
 
@@ -86,6 +87,29 @@ class TestCreateLead:
         # Evolution env is unset in the fixture; create_lead must still succeed.
         res = await tools.dispatch("create_lead", {"business_name": "X"})
         assert res["ok"] is True
+
+
+class TestBehaviorEnrichment:
+    async def test_score_and_summary_folded_into_description(self, fake_http):
+        tools.set_behavior({"pages_visited": ["/", "/pricing", "/contact"], "geo_country": "BR"})
+        await tools.dispatch("create_lead", {"business_name": "Padaria", "description": "quer um site"})
+        body = fake_http.calls[0]["json"]
+        assert body["description"].startswith("quer um site")
+        assert "[lead score:" in body["description"]
+        assert "/pricing" in body["description"] and "country=BR" in body["description"]
+
+    async def test_no_behavior_leaves_description_untouched(self, fake_http):
+        tools.set_behavior(None)
+        await tools.dispatch("create_lead", {"business_name": "Padaria", "description": "quer um site"})
+        assert fake_http.calls[0]["json"]["description"] == "quer um site"
+
+    async def test_crm_payload_keeps_stable_top_level_fields(self, fake_http):
+        # Enrichment must NOT add new top-level keys (contract stability with the CRM).
+        tools.set_behavior({"pages_visited": ["/pricing"]})
+        await tools.dispatch("create_lead", {"business_name": "X"})
+        assert set(fake_http.calls[0]["json"]) <= {
+            "businessName", "description", "source", "sourceGroup", "isProspect", "whatsapp", "contacts",
+        }
 
 
 class TestValidation:

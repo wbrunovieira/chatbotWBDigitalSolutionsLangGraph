@@ -208,3 +208,33 @@ class TestReviseResponseWiring:
         result = await nodes.revise_response({"response": LONG_RESPONSE, "language": "pt-BR"})
         assert result["revised_response"] == LONG_RESPONSE   # not an English error string
         assert result["step"] == "revise_response_skipped"
+
+
+class TestBehaviorPersonalization:
+    """#8b: behavioral context adds an internal, tracking-silent personalization hint."""
+
+    async def _capture_system_message(self, monkeypatch, state):
+        captured = {}
+
+        async def fake(messages, temperature=0.7, use_tools=False):
+            captured["messages"] = messages
+            return text_response("ok")
+
+        monkeypatch.setattr(nodes.generation, "_deepseek_chat", fake)
+        monkeypatch.setattr(langfuse_client, "get_prompt", lambda *a, **k: None)
+        await nodes.generate_response(state)
+        return captured["messages"][0]["content"]
+
+    async def test_hint_injected_when_behavior_present(self, monkeypatch):
+        system_msg = await self._capture_system_message(monkeypatch, {
+            "user_input": "quero um site", "augmented_input": "quero um site", "language": "pt-BR",
+            "behavior": {"pages_visited": ["/pricing"], "geo_country": "BR"},
+        })
+        assert "track browsing" in system_msg.lower()  # tracking-silent hint present
+        assert "/pricing" in system_msg                 # the signal reaches the model
+
+    async def test_no_hint_when_behavior_absent(self, monkeypatch):
+        system_msg = await self._capture_system_message(monkeypatch, {
+            "user_input": "oi", "augmented_input": "oi", "language": "pt-BR",
+        })
+        assert "track browsing" not in system_msg.lower()
