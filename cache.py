@@ -1,4 +1,5 @@
 import json
+import math
 from urllib.parse import quote
 
 import redis.asyncio as redis
@@ -52,3 +53,54 @@ async def get_cached_response(key: str):
 
 async def set_cached_response(key: str, value: dict, expire: int = REDIS_CACHE_EXPIRE_SECONDS):
     await get_redis().set(key, json.dumps(value), ex=expire)
+
+
+# --- Semantic cache (#12) ---
+# A bounded bucket of {vec, payload} entries per (language, page) so a paraphrase of an
+# already-answered question can be served without a new LLM call. The caller computes the
+# embedding (keeps this module free of the embedding/nodes import → no cycle).
+
+
+def _cosine(a: list, b: list) -> float:
+    """Cosine similarity of two equal-length vectors; 0.0 if either is degenerate."""
+    if not a or not b or len(a) != len(b):
+        return 0.0
+    dot = na = nb = 0.0
+    for x, y in zip(a, b):
+        dot += x * y
+        na += x * x
+        nb += y * y
+    if na == 0.0 or nb == 0.0:
+        return 0.0
+    return dot / (math.sqrt(na) * math.sqrt(nb))
+
+
+async def semantic_get(bucket_key: str, query_vec: list, threshold: float):
+    """Return the payload whose stored embedding is most similar to `query_vec`
+    (cosine >= threshold), or None. `query_vec` is precomputed by the caller."""
+    raw = await get_redis().get(bucket_key)
+    if not raw:
+        return None
+    try:
+        entries = json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+    best_payload, best_sim = None, -1.0
+    for entry in entries:
+        sim = _cosine(query_vec, entry.get("vec") or [])
+        if sim > best_sim:
+            best_payload, best_sim = entry.get("payload"), sim
+    return best_payload if best_payload is not None and best_sim >= threshold else None
+
+
+async def semantic_put(bucket_key: str, query_vec: list, payload: dict, max_entries: int,
+                       expire: int = REDIS_CACHE_EXPIRE_SECONDS):
+    """Append {vec, payload} to the bucket, keeping only the most recent `max_entries`."""
+    raw = await get_redis().get(bucket_key)
+    try:
+        entries = json.loads(raw) if raw else []
+    except (ValueError, TypeError):
+        entries = []
+    entries.append({"vec": query_vec, "payload": payload})
+    entries = entries[-max_entries:]
+    await get_redis().set(bucket_key, json.dumps(entries), ex=expire)

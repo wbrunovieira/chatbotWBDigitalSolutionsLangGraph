@@ -17,7 +17,9 @@ from dotenv import load_dotenv
 import config
 import ingest
 from db import get_qdrant_client
+import cache
 from cache import get_cached_response, set_cached_response
+from nodes.embeddings import compute_embedding
 from hashlib import sha256
 import time
 from deepseek_optimizer import (
@@ -368,6 +370,12 @@ def _maybe_schedule_judge(langfuse_trace, user_input: str, response: str, result
     task.add_done_callback(_BACKGROUND_TASKS.discard)
 
 
+def _semantic_cache_bucket(language: str, current_page: str) -> str:
+    """Bucket key for the semantic cache. Scoped by (language, page) — never user, because it
+    only ever holds shared/anon (context-free, user-independent) turns."""
+    return "semcache:" + sha256(f"{language}_{current_page}".encode("utf-8")).hexdigest()
+
+
 async def _handle_chat(payload: ChatRequest):
     user_id = payload.user_id
     language = payload.language
@@ -381,6 +389,19 @@ async def _handle_chat(payload: ChatRequest):
     cached_result = await get_cached_response(cache_key)
     if cached_result:
         return {**cached_result, "cached": True, "cache_type": "redis"}
+
+    # Semantic cache (#12): only for shared/anon users, whose turns are context-free and
+    # user-independent, so serving a paraphrase's cached answer is safe. Logged-in users with
+    # memory skip it (a paraphrase must not bypass their live conversation). Computed once and
+    # reused for the write below.
+    semantic_enabled = config.SEMANTIC_CACHE_ENABLED and user_id in config.SHARED_USER_IDS
+    query_vec = None
+    if semantic_enabled:
+        query_vec = await asyncio.to_thread(compute_embedding, payload.message)
+        bucket = _semantic_cache_bucket(language, current_page)
+        semantic_hit = await cache.semantic_get(bucket, query_vec, config.SEMANTIC_CACHE_THRESHOLD)
+        if semantic_hit:
+            return {**semantic_hit, "cached": True, "cache_type": "semantic"}
 
     page_context = _page_context(current_page)
     langfuse_trace = create_trace(
@@ -424,6 +445,12 @@ async def _handle_chat(payload: ChatRequest):
     # the answer depends on it, so caching by message would serve a stale answer. First turn <= 2.
     if len(result.get("messages", [])) <= 2:
         await set_cached_response(cache_key, response_data)
+        # Also seed the semantic cache so a later paraphrase hits (shared/anon users only).
+        if semantic_enabled and query_vec is not None:
+            await cache.semantic_put(
+                _semantic_cache_bucket(language, current_page),
+                query_vec, response_data, config.SEMANTIC_CACHE_MAX_ENTRIES,
+            )
 
     return response_data
 
