@@ -22,14 +22,22 @@ async def chat_completion(
     response_format: dict | None = None,
     extra_headers: dict | None = None,
     timeout: float = DEFAULT_TIMEOUT,
+    model: str | None = None,
+    api_url: str | None = None,
+    api_key: str | None = None,
 ) -> httpx.Response:
     """
-    POST a chat completion to DeepSeek and return the raw httpx response. Callers do their own
-    `.json()` / `data["choices"]` extraction / usage tracking, so this stays a thin transport
-    seam (URL, auth, model, timeout in one place), not a leaky abstraction over the varied
-    response handling — and callers that need to see a non-JSON/error body still can.
+    POST a chat completion to an OpenAI-compatible endpoint and return the raw httpx response.
+    Defaults to DeepSeek (config), but model/api_url/api_key can be overridden so the same
+    transport serves per-task model routing and a secondary provider (see llm.py). Callers do
+    their own `.json()` / `data["choices"]` extraction / usage tracking, so this stays a thin
+    transport seam, not a leaky abstraction over the varied response handling.
     """
-    body: dict = {"model": DEEPSEEK_MODEL, "messages": messages, "temperature": temperature}
+    body: dict = {
+        "model": model or DEEPSEEK_MODEL,
+        "messages": messages,
+        "temperature": temperature,
+    }
     if tools is not None:
         body["tools"] = tools
         body["tool_choice"] = "auto"
@@ -37,11 +45,11 @@ async def chat_completion(
         body["response_format"] = response_format
 
     headers = {
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "Authorization": f"Bearer {api_key or DEEPSEEK_API_KEY}",
         "Content-Type": "application/json",
     }
     if extra_headers:
         headers.update(extra_headers)
 
     async with httpx.AsyncClient(timeout=timeout) as client:
-        return await client.post(DEEPSEEK_API_URL, headers=headers, json=body)
+        return await client.post(api_url or DEEPSEEK_API_URL, headers=headers, json=body)
