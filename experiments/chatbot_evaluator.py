@@ -114,7 +114,7 @@ async def evaluate_chatbot_response(
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "deepseek-chat",
+                    "model": "deepseek-v4-flash",
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0.1,
                 },
