@@ -397,11 +397,18 @@ async def _handle_chat(payload: ChatRequest):
     semantic_enabled = config.SEMANTIC_CACHE_ENABLED and user_id in config.SHARED_USER_IDS
     query_vec = None
     if semantic_enabled:
-        query_vec = await asyncio.to_thread(compute_embedding, payload.message)
-        bucket = _semantic_cache_bucket(language, current_page)
-        semantic_hit = await cache.semantic_get(bucket, query_vec, config.SEMANTIC_CACHE_THRESHOLD)
-        if semantic_hit:
-            return {**semantic_hit, "cached": True, "cache_type": "semantic"}
+        # The semantic cache is an optimization, never a dependency: any failure (embedding
+        # model cold-start, Redis hiccup) must degrade to the normal graph path, not 500 the
+        # request. query_vec stays None on failure so the write below is skipped too.
+        try:
+            query_vec = await asyncio.to_thread(compute_embedding, payload.message)
+            bucket = _semantic_cache_bucket(language, current_page)
+            semantic_hit = await cache.semantic_get(bucket, query_vec, config.SEMANTIC_CACHE_THRESHOLD)
+            if semantic_hit:
+                return {**semantic_hit, "cached": True, "cache_type": "semantic"}
+        except Exception as exc:  # noqa: BLE001 — optimization must never break the chat
+            logging.warning("semantic cache lookup failed (continuing): %s", exc)
+            query_vec = None
 
     page_context = _page_context(current_page)
     langfuse_trace = create_trace(
@@ -447,10 +454,13 @@ async def _handle_chat(payload: ChatRequest):
         await set_cached_response(cache_key, response_data)
         # Also seed the semantic cache so a later paraphrase hits (shared/anon users only).
         if semantic_enabled and query_vec is not None:
-            await cache.semantic_put(
-                _semantic_cache_bucket(language, current_page),
-                query_vec, response_data, config.SEMANTIC_CACHE_MAX_ENTRIES,
-            )
+            try:
+                await cache.semantic_put(
+                    _semantic_cache_bucket(language, current_page),
+                    query_vec, response_data, config.SEMANTIC_CACHE_MAX_ENTRIES,
+                )
+            except Exception as exc:  # noqa: BLE001 — seeding the cache must never break the reply
+                logging.warning("semantic cache write failed (continuing): %s", exc)
 
     return response_data
 

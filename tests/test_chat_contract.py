@@ -304,6 +304,16 @@ class TestSemanticCache:
         assert body["cached"] is True and body["cache_type"] == "semantic"
         assert len(graph_calls) == 1, "a semantic hit must not re-run the graph"
 
+    async def test_embedding_failure_degrades_to_graph(self, client, graph_calls, monkeypatch):
+        # The semantic cache is an optimization: if embedding blows up, the chat still works.
+        def boom(_text):
+            raise RuntimeError("embedding model unavailable")
+
+        monkeypatch.setattr(main, "compute_embedding", boom)
+        resp = await post(client, {"message": "quero um site", "user_id": "anon"})
+        assert resp.status_code == 200
+        assert len(graph_calls) == 1  # fell through to the graph
+
     async def test_logged_in_user_skips_semantic_cache(self, client, graph_calls, monkeypatch):
         monkeypatch.setattr(main, "compute_embedding", self._fake_embed)
 
