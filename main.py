@@ -110,6 +110,20 @@ def split_greeting_bubbles(text: str) -> list:
 # bubbles; overflow is merged back into the last one.
 MAX_RESPONSE_BUBBLES = 5
 
+# The widget renders PLAIN TEXT, so markdown emphasis leaks through as literal characters
+# (e.g. "**WB Digital Solutions**"). Strip bold/italic/heading markers; keep the text.
+_MD_BOLD_ITALIC = re.compile(r"(\*\*|__|\*|_)(.+?)\1", re.DOTALL)
+_MD_HEADING = re.compile(r"^\s{0,3}#{1,6}\s+", re.MULTILINE)
+
+
+def strip_markdown(text: str) -> str:
+    """Remove markdown emphasis/heading markers the plain-text widget can't render."""
+    if not text:
+        return text
+    text = _MD_BOLD_ITALIC.sub(r"\2", text)
+    text = _MD_HEADING.sub("", text)
+    return text.replace("**", "").replace("__", "")
+
 
 def format_response_parts(text: str, is_greeting: bool = False) -> list:
     """Split an answer into safe chat bubbles for the widget (#22).
@@ -491,7 +505,8 @@ def _build_state(payload: ChatRequest, page_context: str) -> dict:
 def _shape_response(result: dict, language: str, current_page: str) -> dict:
     """The fixed response shape the widget reads. Greetings split into bubbles; other
     answers split on blank lines."""
-    full_response = result.get("revised_response", result.get("response", ""))
+    # Strip markdown the plain-text widget can't render (** bold **, headings, etc.).
+    full_response = strip_markdown(result.get("revised_response", result.get("response", "")))
     is_greeting = result.get("intent") == "greeting"
     response_parts = format_response_parts(full_response, is_greeting=is_greeting)
     return {

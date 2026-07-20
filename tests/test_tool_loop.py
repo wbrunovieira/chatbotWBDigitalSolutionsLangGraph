@@ -209,6 +209,22 @@ class TestReviseResponseWiring:
         assert result["revised_response"] == LONG_RESPONSE   # not an English error string
         assert result["step"] == "revise_response_skipped"
 
+    async def test_connect_error_also_keeps_original_not_a_500(self, monkeypatch):
+        # Regression: revision caught ONLY ReadTimeout, so a ConnectError/ConnectTimeout
+        # escaped -> 500 and threw away the good generated answer. Must degrade on any
+        # httpx transport error, like generate_response.
+        import httpx as _httpx
+
+        monkeypatch.setattr(langfuse_client, "get_prompt", lambda *a, **k: None)
+
+        async def boom(*a, **k):
+            raise _httpx.ConnectError("connection refused")
+
+        monkeypatch.setattr(nodes.deepseek_client, "chat_completion", boom)
+        result = await nodes.revise_response({"response": LONG_RESPONSE, "language": "pt-BR"})
+        assert result["revised_response"] == LONG_RESPONSE
+        assert result["step"] == "revise_response_skipped"
+
 
 class TestBehaviorPersonalization:
     """#8b: behavioral context adds an internal, tracking-silent personalization hint."""

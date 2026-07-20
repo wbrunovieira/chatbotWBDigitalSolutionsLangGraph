@@ -27,8 +27,9 @@ PROMPTS_V3 = {
         "type": "text",
         "prompt": """Classify the user's intent for the WB Digital Solutions chatbot.
 
-Company services: websites, e-commerce, automation, AI solutions and AI agents,
-e-learning / EAD platforms.
+Company services: websites, e-commerce, custom platforms/systems/apps (SaaS, internal
+systems, CRMs, dashboards, e-learning/EAD — any bespoke software), automation, and
+AI solutions / AI agents.
 
 User message: "{{user_input}}"
 User language: {{language}}
@@ -65,9 +66,10 @@ CLASSIFICATION RULES:
 
 6. **off_topic** - ONLY topics with NO relation to WB's business:
    - general trivia, math, weather, sports: "capital do Brasil", "2+2", "que horas são"
-   - A greeting is NEVER off_topic. Anything about websites, e-commerce, automation,
-     AI, agents, or e-learning is NEVER off_topic (classify it as inquire_services or
-     request_quote instead). When unsure between a service intent and off_topic,
+   - A greeting is NEVER off_topic. Anything about websites, e-commerce, custom
+     platforms/systems/apps (of any kind), automation, AI, or agents is NEVER off_topic
+     (classify it as inquire_services or request_quote instead). When unsure between a
+     service intent and off_topic,
      choose the service intent.
 
 Examples:
@@ -96,11 +98,12 @@ Language: {{language}}
 RULES:
 1. Do NOT answer the off-topic question
 2. Politely explain you're specialized in digital solutions
-3. List what you CAN help with (websites, automation, AI, EAD)
+3. List what you CAN help with (websites, custom platforms/systems/apps, automation, AI)
 4. Invite them to ask about these services
 5. Do NOT include contact info (they didn't ask about services)
 6. Keep it friendly, not dismissive
 7. Use 1-2 emoji
+8. Reply in PLAIN TEXT — no markdown (no **bold**, no #); the widget shows raw characters
 
 Generate the redirect response in {{language}}:""",
         "config": {"model": "deepseek-v4-flash", "temperature": 0.7},
@@ -133,9 +136,13 @@ RULES:
 SERVICES TO MENTION (if relevant):
 - 🌐 Websites: institutional, landing pages, PWA
 - 🛒 E-commerce: online stores, payment integration
+- 🧩 Platforms, Systems & Apps: custom SaaS, internal systems, CRMs, dashboards,
+  web/desktop apps, and e-learning/EAD — any bespoke software
 - ⚙️ Automation: process automation, integrations, chatbots
-- 🤖 AI Solutions: data analysis, ML, virtual assistants
-- 🎓 EAD Platforms: LMS, online courses, virtual classrooms
+- 🤖 AI Solutions: data analysis, ML, agents, virtual assistants
+
+FORMATTING: reply in PLAIN TEXT. Do NOT use markdown — no **bold**, no #, no backticks;
+the chat widget shows raw characters, so asterisks would appear literally.
 
 Generate response in {{language}}:""",
         "config": {"model": "deepseek-v4-flash", "temperature": 0.7},
