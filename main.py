@@ -292,8 +292,10 @@ async def _stream_chat(payload: ChatRequest):
 
     Real token streaming on the normal RAG path; cache hits, greetings and off-topic replies
     are chunked (there is no live LLM stream to tap). Tools, self-revision and conversation
-    memory stay on /chat — streaming is incompatible with the tool loop — and the judge + log
-    run AFTER the stream closes so they never delay the first token.
+    memory stay on /chat — streaming is incompatible with the tool loop — and the turn is
+    persisted (PII-redacted) AFTER the stream closes so logging never delays the first token.
+    Token cost isn't metered here (the stream has no usage frame); abuse is still bounded by
+    the rate limit + daily spend cap enforced at entry.
     """
     language = payload.language
     current_page = payload.current_page
