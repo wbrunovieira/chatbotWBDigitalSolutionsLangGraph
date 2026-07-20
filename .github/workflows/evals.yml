@@ -12,12 +12,19 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "nodes.py"
+      - "nodes/**"
+      - "main.py"
+      - "llm.py"
+      - "deepseek_client.py"
+      - "ingest.py"
       - "tools.py"
       - "config.py"
       - "guardrails.py"
+      - "behavior.py"
+      - "language.py"
       - "langfuse_client.py"
       - "langfuse_prompts_v3.py"
+      - "company_info.md"
       - "evals/**"
       - ".github/workflows/evals.yml"
   workflow_dispatch:
@@ -56,3 +63,7 @@ jobs:
         run: python evals/run_tools.py --threshold 0.75
       - name: Adversarial eval (prompt injection; hard-fail on any prompt leak)
         run: python evals/run_adversarial.py --threshold 0.85
+      - name: RAG-quality eval (retrieval recall + answer faithfulness)
+        run: python evals/run_rag.py --recall-threshold 0.8 --faithfulness-threshold 0.9
+      - name: Multi-turn eval (lead-capture happy path across turns)
+        run: python evals/run_multiturn.py --threshold 0.75

@@ -1,0 +1,8 @@
+{"question": "When was WB Digital Solutions founded?", "must_include": ["2023"], "language": "en"}
+{"question": "What technologies secure the premium websites?", "must_include": ["Kubernetes", "Rust"], "language": "en"}
+{"question": "Which generative AI models do you integrate with?", "must_include": ["ChatGPT", "Claude", "Gemini"], "language": "en"}
+{"question": "Do you build e-commerce and e-learning platforms?", "must_include": ["e-commerce", "e-learning"], "language": "en"}
+{"question": "What kinds of business automation do you offer?", "must_include": ["inventory"], "language": "en"}
+{"question": "Vocês fazem otimização de SEO nos sites?", "must_include": ["SEO"], "language": "pt-BR"}
+{"question": "What machine learning models can you build?", "must_include": ["fraud", "forecasting"], "language": "en"}
+{"question": "Qual é a missão da WB Digital Solutions?", "must_include": ["performance"], "language": "pt-BR"}
