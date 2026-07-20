@@ -63,7 +63,7 @@ async def revise_response(state: dict) -> dict:
         generation = langfuse_client.start_llm_generation(
             trace=trace,
             name="revise_response",
-            model="deepseek-chat",
+            model="deepseek-v4-flash",
             input_messages=[{"role": "user", "content": prompt}],
             metadata={"temperature": 0.5},
             prompt=revise_prompt if revise_prompt else None,

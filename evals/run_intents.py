@@ -34,7 +34,7 @@ def classify(message: str, language: str, current_page: str = "/") -> str:
         user_input=message, language=language, current_page=current_page
     )
     body = {
-        "model": "deepseek-chat",  # NB: a floating vendor pointer — weights can change server-side
+        "model": "deepseek-v4-flash",  # NB: a floating vendor pointer — weights can change server-side
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0,  # deterministic, so a gate red means a real change, not sampling noise
     }

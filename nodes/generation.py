@@ -126,7 +126,7 @@ async def _run_tool_loop(messages: list, trace, instruction_prompt, max_iters: i
     tool_results = []
     for _ in range(max_iters):
         generation = langfuse_client.start_llm_generation(
-            trace=trace, name="generate_response", model="deepseek-chat",
+            trace=trace, name="generate_response", model="deepseek-v4-flash",
             input_messages=messages, metadata={"temperature": 0.7}, prompt=instruction_prompt,
         )
         data = await _deepseek_chat(messages, use_tools=True)
@@ -164,7 +164,7 @@ async def _run_tool_loop(messages: list, trace, instruction_prompt, max_iters: i
 
     # Still asking for tools after max_iters: force a final text answer (tools off).
     generation = langfuse_client.start_llm_generation(
-        trace=trace, name="generate_response", model="deepseek-chat",
+        trace=trace, name="generate_response", model="deepseek-v4-flash",
         input_messages=messages, metadata={"temperature": 0.7}, prompt=instruction_prompt,
     )
     data = await _deepseek_chat(messages, use_tools=False)

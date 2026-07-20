@@ -80,7 +80,7 @@ Examples:
 
 Respond with ONLY a JSON object, no prose:
 {"intent": "<one of: greeting, request_quote, inquire_services, share_contact, chat_with_agent, off_topic>"}""",
-        "config": {"model": "deepseek-chat", "temperature": 0.1},
+        "config": {"model": "deepseek-v4-flash", "temperature": 0.1},
     },
 
     # Greetings are hardcoded (no LLM call) in nodes.GREETINGS — see the architecture guideline.
@@ -103,7 +103,7 @@ RULES:
 7. Use 1-2 emoji
 
 Generate the redirect response in {{language}}:""",
-        "config": {"model": "deepseek-chat", "temperature": 0.7},
+        "config": {"model": "deepseek-v4-flash", "temperature": 0.7},
     },
 
     # ========== RESPOSTA SOBRE SERVIÇOS ==========
@@ -138,7 +138,7 @@ SERVICES TO MENTION (if relevant):
 - 🎓 EAD Platforms: LMS, online courses, virtual classrooms
 
 Generate response in {{language}}:""",
-        "config": {"model": "deepseek-chat", "temperature": 0.7},
+        "config": {"model": "deepseek-v4-flash", "temperature": 0.7},
     },
 
     # Pricing is no longer discussed in chat — a price question is routed to lead capture
@@ -180,7 +180,7 @@ STRICT RULES:
 7. Keep friendly, professional tone
 
 Return ONLY the revised text:""",
-        "config": {"model": "deepseek-chat", "temperature": 0.5},
+        "config": {"model": "deepseek-v4-flash", "temperature": 0.5},
     },
 
     # ========== AVALIAÇÃO ==========
@@ -201,7 +201,7 @@ CRITERIA:
 
 JSON only:
 {"relevance": 0|1, "contact_when_asked": 0|1, "tone": 0|1, "language_correct": 0|1, "concise": 0|1}""",
-        "config": {"model": "deepseek-chat", "temperature": 0.1},
+        "config": {"model": "deepseek-v4-flash", "temperature": 0.1},
     },
 }
 

@@ -111,7 +111,7 @@ Respond ONLY with JSON: {{"intent_correct": 0|1, "relevance": 0|1, "mentions_con
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "deepseek-chat",
+                    "model": "deepseek-v4-flash",
                     "messages": [{"role": "user", "content": eval_prompt}],
                     "temperature": 0.1,
                 },
