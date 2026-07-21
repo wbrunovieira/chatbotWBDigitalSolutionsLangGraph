@@ -6,12 +6,21 @@ from agents.graph_config import route_after_intent
 
 
 class TestGenerateHandoff:
-    async def test_returns_whatsapp_handoff_per_language(self):
+    async def test_capture_first_offers_all_three_surfaces(self):
         out = await nodes.generate_handoff_response({"language": "en"})
-        assert config.WHATSAPP_CONTACT in out["response"]
-        assert "WhatsApp" in out["response"]
+        resp = out["response"]
+        # capture-first: asks for name + contact (the primary path)
+        assert "name" in resp.lower()
+        # + the two alternatives: booking link and WhatsApp
+        assert config.BOOKING_URL in resp
+        assert config.WHATSAPP_CONTACT in resp
         assert out["revised_response"] == out["response"]
         assert out["step"] == "generate_handoff_response"
+
+    async def test_all_languages_have_booking_and_whatsapp(self):
+        for lang in ("pt-BR", "en", "es", "it"):
+            resp = (await nodes.generate_handoff_response({"language": lang}))["response"]
+            assert config.BOOKING_URL in resp and config.WHATSAPP_CONTACT in resp
 
     async def test_unknown_or_missing_language_falls_back_to_pt(self):
         pt = (await nodes.generate_handoff_response({"language": "pt-BR"}))["response"]
