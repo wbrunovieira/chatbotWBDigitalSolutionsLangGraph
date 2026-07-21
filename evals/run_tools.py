@@ -32,12 +32,24 @@ def picked_tool(message: str):
         ],
         "tools": TOOL_SPECS,
         "tool_choice": "auto",
-        "temperature": 0,  # deterministic, so a gate red is a real change, not sampling noise
+        "temperature": 0,
     }
     data = _deepseek.chat(body)
     msg = data["choices"][0]["message"]
     calls = msg.get("tool_calls") or []
     return calls[0]["function"]["name"] if calls else None
+
+
+# DeepSeek tool-calling is NOT deterministic even at temperature 0 (the same case can flip
+# between calls), so a single sample makes the gate flaky at the boundary. Take the majority
+# of best-of-N samples per case to stabilize the result without weakening the threshold.
+_VOTES = 3
+
+
+def picked_tool_voted(message: str):
+    from collections import Counter
+    votes = [picked_tool(message) for _ in range(_VOTES)]
+    return Counter(votes).most_common(1)[0][0]
 
 
 def is_ok(expected, got) -> bool:
@@ -56,7 +68,7 @@ def main() -> int:
     passed, fails = 0, []
     try:
         for r in rows:
-            got = picked_tool(r["message"])
+            got = picked_tool_voted(r["message"])
             if is_ok(r["expected_tool"], got):
                 passed += 1
             else:

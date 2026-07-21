@@ -16,28 +16,28 @@ import config
 HANDOFFS = {
     "pt-BR": (
         "Perfeito! 😊 O jeito mais rápido pra você: me diz seu nome e WhatsApp (ou email) que "
-        "eu já encaminho pro Bruno — ele te procura pra entender suas ideias. (uso seus dados "
-        "só pra esse contato)\n\n"
+        "eu já encaminho pro Bruno — ele te procura pra entender suas ideias. (seus dados "
+        "vão pro nosso time entrar em contato)\n\n"
         "Se preferir, dá pra agendar uma conversa aqui: {booking}, ou falar com o Bruno agora "
         "no WhatsApp {contact}."
     ),
     "en": (
         "Perfect! 😊 The quickest way for you: just share your name and WhatsApp (or email) and "
         "I'll pass it straight to our team — they'll reach out to hear your ideas. (your details "
-        "are used only for this contact)\n\n"
+        "go to our team so they can contact you)\n\n"
         "If you prefer, you can book a call here: {booking}, or message us now on WhatsApp {contact}."
     ),
     "es": (
         "¡Perfecto! 😊 Lo más rápido para ti: dime tu nombre y WhatsApp (o email) y lo paso "
-        "directo a nuestro equipo — te contactarán para conocer tus ideas. (tus datos se usan "
-        "solo para este contacto)\n\n"
+        "directo a nuestro equipo — te contactarán para conocer tus ideas. (tus datos van "
+        "a nuestro equipo para contactarte)\n\n"
         "Si prefieres, puedes agendar una llamada aquí: {booking}, o escribirnos ahora por "
         "WhatsApp {contact}."
     ),
     "it": (
         "Perfetto! 😊 Il modo più rapido per te: dimmi il tuo nome e WhatsApp (o email) e lo "
         "giro subito al nostro team — ti contatteranno per capire le tue idee. (i tuoi dati "
-        "sono usati solo per questo contatto)\n\n"
+        "vanno al nostro team per contattarti)\n\n"
         "Se preferisci, puoi prenotare una chiamata qui: {booking}, oppure scrivici ora su "
         "WhatsApp {contact}."
     ),
