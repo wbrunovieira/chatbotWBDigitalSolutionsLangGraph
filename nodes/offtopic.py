@@ -2,8 +2,8 @@
 
 import logging
 
-import langfuse_client
-import llm
+from observability import langfuse_client
+from providers import llm
 
 
 async def generate_off_topic_response(state: dict) -> dict:

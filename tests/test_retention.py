@@ -2,7 +2,7 @@
 
 import time
 
-import retention
+from rag import retention
 
 
 class FakeClient:

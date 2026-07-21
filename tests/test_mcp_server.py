@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-import mcp_server
-import tools
+from agents import mcp_server
+from agents import tools
 
 
 def _result(ret) -> dict:

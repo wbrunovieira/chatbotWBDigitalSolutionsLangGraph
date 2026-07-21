@@ -16,9 +16,9 @@ os.environ.setdefault("DEEPSEEK_API_KEY", "test-key")
 os.environ.setdefault("QDRANT_HOST", "http://localhost:6333")
 os.environ.setdefault("ADMIN_API_TOKEN", "test-admin-token")
 
-import cache  # noqa: E402
+from core import cache  # noqa: E402
 import config  # noqa: E402
-import db  # noqa: E402
+from rag import db  # noqa: E402
 
 
 class _UnstubbedQdrant:

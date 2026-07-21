@@ -53,6 +53,6 @@ def purge_old_chat_logs(client, retention_days: int = None) -> dict:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    from db import get_qdrant_client
+    from rag.db import get_qdrant_client
 
     print(purge_old_chat_logs(get_qdrant_client()))

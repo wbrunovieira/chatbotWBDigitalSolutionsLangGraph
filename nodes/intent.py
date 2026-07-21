@@ -4,10 +4,10 @@ import json
 import logging
 import re
 
-import deepseek_client  # noqa: F401  (tests patch nodes.deepseek_client; llm delegates to it)
-import langfuse_client
-import llm
-from deepseek_optimizer import DeepSeekOptimizer
+from providers import deepseek_client  # noqa: F401  (tests patch nodes.deepseek_client; llm delegates to it)
+from observability import langfuse_client
+from providers import llm
+from providers.deepseek_optimizer import DeepSeekOptimizer
 
 # Order matters: off_topic is LAST so that if a service word also appears we prefer the
 # service intent — a sales bot must never deflect a real inquiry to off_topic.

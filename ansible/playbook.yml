@@ -364,7 +364,7 @@
     - name: Schedule daily chat_logs retention purge (LGPD)
       cron:
         name: "chat_logs retention purge"
-        job: "docker exec chatbot_app python retention.py >> /var/log/chatbot-retention.log 2>&1"
+        job: "docker exec chatbot_app python -m rag.retention >> /var/log/chatbot-retention.log 2>&1"
         minute: "0"
         hour: "3"
 

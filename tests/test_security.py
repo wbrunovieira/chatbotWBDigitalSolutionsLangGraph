@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from starlette.requests import Request
 
 import config
-import security
+from safety import security
 
 
 def make_request(headers: dict | None = None, peer: str = "10.0.0.1") -> Request:
@@ -154,7 +154,7 @@ class TestEnforceChatLimits:
             async def get(self, *a, **kw):
                 raise ConnectionError("redis is down")
 
-        monkeypatch.setattr("security.get_redis", lambda: DeadRedis())
+        monkeypatch.setattr("safety.security.get_redis", lambda: DeadRedis())
         request = make_request({"x-real-ip": "203.0.113.5"})
 
         with caplog.at_level("ERROR"):

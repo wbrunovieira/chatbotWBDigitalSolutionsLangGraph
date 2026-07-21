@@ -1,6 +1,6 @@
 """Behavioral context: scoring, summary, and personalization hint (#8b)."""
 
-import behavior
+from core import behavior
 
 
 class TestScoreLead:

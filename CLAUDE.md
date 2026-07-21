@@ -42,24 +42,24 @@ There are no tests in this project.
 POST /chat → Pattern cache check → Redis cache check → LangGraph state machine → Cache result → Return
 ```
 
-### LangGraph State Machine (`graph_config.py`)
+### LangGraph State Machine (`agents/graph_config.py`)
 
-The graph routes based on detected intent:
-- **greeting** → `generate_greeting_response` (hardcoded, no API call) → END
-- **off_topic** → `generate_off_topic_response` (LLM redirect) → END
-- **chat_with_agent** → END (handled by frontend)
+The graph routes based on detected intent (each canned node then runs `log_saving` → END):
+- **greeting** → `generate_greeting_response` (hardcoded, no API call)
+- **off_topic** → `generate_off_topic_response` (LLM redirect)
+- **chat_with_agent** → `generate_handoff_response` (hardcoded WhatsApp handoff, no API call)
 - **normal flow** → `retrieve_company_context` → `retrieve_user_context` → `augment_query` → `response_generation` → `response_revision` → `log_saving` → END
 
-State is a plain `Dict[str, Any]` passed through nodes. The Qdrant client is a process-wide
-singleton (`db.get_qdrant_client()`), not carried in state.
+State is a `ChatState` TypedDict passed through nodes. The Qdrant client is a process-wide
+singleton (`rag.db.get_qdrant_client()`), not carried in state.
 
 ### Three-Tier Caching
 
 1. **Pattern match** (`cached_responses.py`): Regex patterns → pre-built responses. Zero latency, zero API cost. Checked first in `main.py`.
-2. **Redis** (`cache.py`): SHA256 of `{message}_{language}_{current_page}` as key. 7-day TTL. Checked second.
-3. **DeepSeek context caching**: HTTP headers in `deepseek_optimizer.py` signal cache preferences to the API.
+2. **Redis** (`core/cache.py`): SHA256 of `{message}_{language}_{current_page}_{user_id}` as key. 7-day TTL. Checked second, plus a semantic (embedding-similarity) layer for shared/anon users.
+3. **DeepSeek context caching**: HTTP headers in `providers/deepseek_optimizer.py` signal cache preferences to the API.
 
-### Cost Optimization (`deepseek_optimizer.py`)
+### Cost Optimization (`providers/deepseek_optimizer.py`)
 
 DeepSeek offers 50% discount 16:30-00:30 UTC (13:30-21:30 Brazil time). The optimizer:
 - Tracks token usage and cost per API call
@@ -95,13 +95,18 @@ Required in `.env`:
 - `REDIS_PORT` — Redis port (default: `6379`)
 - `REDIS_DB` — Redis DB number (default: `0`)
 
-## File Responsibilities
+## Project structure
 
-- **main.py** — FastAPI app, endpoints, Qdrant collection init, cache orchestration, page context mapping
-- **graph_config.py** — LangGraph `StateGraph` wiring and conditional routing
-- **nodes.py** — All graph node functions: intent detection, embedding, context retrieval, LLM calls, response revision, Qdrant logging, greeting/off-topic generators
-- **config.py** — Env var loading and Redis config constants
-- **cache.py** — Async Redis get/set via `redis.asyncio`
-- **cached_responses.py** — Pre-computed pattern-matched responses by category and language
-- **deepseek_optimizer.py** — Discount time detection, token tracking, cost estimation, optimization headers
-- **company_info.md** — Company profile used for RAG (loaded into Qdrant `company_info` collection)
+App code is grouped into topical packages; only `main.py` and `config.py` live at the root
+(so `uvicorn main:app` and the deploy pipeline are unchanged).
+
+- **main.py** — FastAPI app, endpoints (`/chat`, `/chat/stream`, `/usage-report`, `/analytics/funnel`), cache orchestration, response shaping.
+- **config.py** — Env var loading and all runtime constants.
+- **agents/** — `graph_config.py` (LangGraph `StateGraph` wiring + conditional routing), `tools.py` (create_lead / schedule_meeting / handoff_to_human), `mcp_server.py`.
+- **nodes/** — graph node functions split by concern: `intent`, `retrieval`, `generation`, `revision`, `logging_node`, `greeting`, `handoff`, `offtopic`, `embeddings`.
+- **providers/** — LLM layer: `llm.py` (routing + fallback), `deepseek_client.py` (transport), `deepseek_optimizer.py` (cost/spend tracking).
+- **rag/** — `ingest.py` (chunk + embed the KB), `db.py` (Qdrant singleton), `retention.py` (LGPD purge, run via `python -m rag.retention`).
+- **core/** — `cache.py` (Redis + semantic cache), `behavior.py` (lead scoring), `language.py` (language resolution).
+- **safety/** — `guardrails.py` (injection pre-filter, output backstop, PII redaction), `security.py` (rate limit + spend cap).
+- **observability/** — `langfuse_client.py`, `langfuse_prompts_v3.py` (prompt fallbacks), `analytics.py` (conversion funnel).
+- **company_info.md** — Company profile used for RAG (loaded into Qdrant `company_info` collection).

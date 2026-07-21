@@ -2,8 +2,8 @@
 
 import pytest
 
-import db
-import langfuse_client
+from rag import db
+from observability import langfuse_client
 import nodes
 
 

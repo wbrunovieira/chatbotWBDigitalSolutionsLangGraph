@@ -4,14 +4,14 @@ import httpx
 import json
 import logging
 
-import behavior as behavior_ctx
-import deepseek_client  # noqa: F401  (tests patch nodes.deepseek_client; llm delegates to it)
-import guardrails
-import langfuse_client
-import llm
-import tools
+from core import behavior as behavior_ctx
+from providers import deepseek_client  # noqa: F401  (tests patch nodes.deepseek_client; llm delegates to it)
+from safety import guardrails
+from observability import langfuse_client
+from providers import llm
+from agents import tools
 from config import MAX_HISTORY_MESSAGES
-from deepseek_optimizer import DeepSeekOptimizer
+from providers.deepseek_optimizer import DeepSeekOptimizer
 
 
 # Per-language answer instruction (#23). Emphatic ("ONLY", "regardless of the context")

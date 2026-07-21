@@ -6,9 +6,9 @@ import uuid
 
 from qdrant_client.http.models import Distance, VectorParams
 
-import guardrails
+from safety import guardrails
 import nodes.embeddings as embeddings
-from db import get_qdrant_client
+from rag.db import get_qdrant_client
 
 
 async def save_log_qdrant(state: dict) -> dict:

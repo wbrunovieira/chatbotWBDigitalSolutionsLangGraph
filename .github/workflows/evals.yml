@@ -13,17 +13,14 @@ on:
     branches: [main]
     paths:
       - "nodes/**"
+      - "agents/**"          # tools, graph_config, mcp_server
+      - "providers/**"       # llm, deepseek_client, deepseek_optimizer
+      - "rag/**"             # ingest, db, retention
+      - "safety/**"          # guardrails, security
+      - "core/**"            # cache, behavior, language
+      - "observability/**"   # langfuse_client, langfuse_prompts_v3, analytics
       - "main.py"
-      - "llm.py"
-      - "deepseek_client.py"
-      - "ingest.py"
-      - "tools.py"
       - "config.py"
-      - "guardrails.py"
-      - "behavior.py"
-      - "language.py"
-      - "langfuse_client.py"
-      - "langfuse_prompts_v3.py"
       - "company_info.md"
       - "evals/**"
       - ".github/workflows/evals.yml"

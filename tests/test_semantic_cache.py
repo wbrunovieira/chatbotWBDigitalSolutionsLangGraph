@@ -2,7 +2,7 @@
 
 import pytest
 
-import cache
+from core import cache
 
 
 class TestCosine:

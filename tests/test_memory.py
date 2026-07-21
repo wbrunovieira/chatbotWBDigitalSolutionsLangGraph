@@ -4,9 +4,9 @@ import pytest
 from langgraph.graph import END, StateGraph
 from langgraph.checkpoint.memory import MemorySaver
 
-import langfuse_client
+from observability import langfuse_client
 import nodes
-from graph_config import ChatState
+from agents.graph_config import ChatState
 
 
 @pytest.fixture(autouse=True)
@@ -84,7 +84,7 @@ class TestThreadIsolationForSharedUsers:
 
 class TestEphemeralThreadEviction:
     def test_evict_thread_removes_it_and_leaves_others(self):
-        import graph_config
+        from agents import graph_config
 
         saver = graph_config.graph.checkpointer
         saver.storage["ephemeral-xyz"] = {"fake": "checkpoint"}
@@ -100,5 +100,5 @@ class TestEphemeralThreadEviction:
         saver.writes.pop(("real-user", "", "task-1"), None)  # cleanup
 
     def test_evict_is_safe_on_unknown_thread(self):
-        import graph_config
+        from agents import graph_config
         graph_config.evict_thread("never-existed")  # must not raise

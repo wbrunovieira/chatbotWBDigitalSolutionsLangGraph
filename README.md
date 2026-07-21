@@ -57,7 +57,7 @@ This is a real, in-production conversational agent — not a tutorial wrapper ar
 
 ## Architecture
 
-A request flows through a compiled **LangGraph** `StateGraph`. The entry node classifies the user's intent, then a conditional router decides the path: greetings and off-topic messages short-circuit to a cheap canned-style response, a `chat_with_agent` intent ends the graph so the frontend can hand off to a human, and **every other intent runs the full RAG pipeline** (retrieve → augment → generate → self-revise → log).
+A request flows through a compiled **LangGraph** `StateGraph`. The entry node classifies the user's intent, then a conditional router decides the path: greetings, off-topic messages, and `chat_with_agent` (a request to talk to a human) each short-circuit to a cheap canned node, and **every other intent runs the full RAG pipeline** (retrieve → augment → generate → self-revise → log).
 
 ```mermaid
 flowchart TD
@@ -66,7 +66,7 @@ flowchart TD
     R -- miss --> I[intent_detection]
     I -->|greeting| G[generate_greeting_response]
     I -->|off_topic| O[generate_off_topic_response]
-    I -->|chat_with_agent| END1[(END · handoff)]
+    I -->|chat_with_agent| H[generate_handoff_response]
     I -->|else| C[retrieve_company_context]
     C --> U[retrieve_user_context]
     U --> AQ[augment_query]
@@ -74,6 +74,7 @@ flowchart TD
     RG --> RV[response_revision]
     G --> L[log_saving]
     O --> L
+    H --> L
     RV --> L
     L --> END2[(END)]
 ```
@@ -97,7 +98,7 @@ flowchart TD
 - **Abuse & cost controls:** per-IP rate limiting + a daily spend circuit-breaker (both Redis-backed), request-size caps, and an admin-token-gated `/usage-report`. See [Security](#security--abuse-controls).
 - **LLM:** DeepSeek (`deepseek-v4-flash`) over the OpenAI-compatible REST API.
 - **Embeddings:** FastEmbed (ONNX `all-MiniLM-L6-v2`) — **no PyTorch**, keeping the image lightweight.
-- **Vector DB / RAG + memory:** Qdrant — the `company_info` knowledge base is chunked (heading-aware) and ingested idempotently at startup ([`ingest.py`](ingest.py)) for top-k retrieval, plus `chat_logs` conversation history.
+- **Vector DB / RAG + memory:** Qdrant — the `company_info` knowledge base is chunked (heading-aware) and ingested idempotently at startup ([`rag/ingest.py`](rag/ingest.py)) for top-k retrieval, plus `chat_logs` conversation history.
 - **Caching:** Redis exact-match cache (7-day TTL, keyed by `sha256(message + language + page)`) to skip the graph entirely on repeats.
 - **Observability:** Langfuse — full request traces, response scoring/evaluation, and **versioned prompts** (`v1` → `v3`) so prompt changes are tracked in production.
 - **Cost control:** a custom `DeepSeekOptimizer` that estimates tokens, applies optimization headers, tracks usage, and skips API calls when a call isn't worth making.
@@ -127,14 +128,14 @@ The response carries the assistant's answer plus cache metadata (`cached`, `cach
 
 The same tools the in-app agent uses — `create_lead`, `schedule_meeting`,
 `handoff_to_human` — are also exposed as a standards-compliant **MCP** (Model Context
-Protocol) server ([`mcp_server.py`](mcp_server.py)), so any MCP client (Claude Desktop,
+Protocol) server ([`agents/mcp_server.py`](agents/mcp_server.py)), so any MCP client (Claude Desktop,
 Cursor, the MCP Inspector) can list and call them. **One tool implementation
 (`tools.py`), two consumers** (the LangGraph agent and MCP) — both go through the same
 Pydantic validation, timeout + retry, and per-IP lead cap.
 
 ```bash
 pip install -r requirements-dev.txt   # pins mcp==1.28.1
-python mcp_server.py                   # stdio transport (local, trusted)
+python -m agents.mcp_server                   # stdio transport (local, trusted)
 ```
 
 > `create_lead` writes to the CRM with no auth, so the trust boundary is the local
@@ -148,14 +149,15 @@ Connect from **Claude Desktop** (`claude_desktop_config.json`):
   "mcpServers": {
     "wb-digital-solutions": {
       "command": "python",
-      "args": ["/absolute/path/to/mcp_server.py"]
+      "args": ["-m", "agents.mcp_server"],
+      "cwd": "/absolute/path/to/repo"
     }
   }
 }
 ```
 
 Then ask *"create a lead for Padaria do Zé"* and Claude calls the CRM through the server.
-Inspect it with `npx @modelcontextprotocol/inspector python mcp_server.py`.
+Inspect it with `npx @modelcontextprotocol/inspector python -m agents.mcp_server`.
 
 ## Running locally
 
@@ -226,20 +228,24 @@ Infrastructure is codified under [`ansible/`](ansible/): playbooks provision an 
 
 ## Repository layout
 
+App code is grouped into topical packages; only `main.py` and `config.py` sit at the root
+(so `uvicorn main:app` and the deploy pipeline stay put).
+
 ```
-main.py              FastAPI app + request lifecycle (limits → cache → graph → trace)
-graph_config.py      LangGraph StateGraph wiring + conditional routing
-nodes.py             Graph nodes: intent, retrieval, generation, revision, logging
-security.py          Per-IP rate limiting + daily spend circuit-breaker (Redis)
-deepseek_optimizer.py  Token/usage optimization, per-request cost accounting
-langfuse_*.py        Langfuse client, tracing, scoring, versioned prompts (v1–v3)
-cache.py / cached_responses.py  Redis caching + pattern cache
-config.py            Environment configuration
-tests/               pytest suite (contract, rate limit, spend cap, hardening)
-.github/workflows/   CI (pytest) + CD (Ansible deploy with approval gate)
-experiments/         Offline evaluation harness + datasets
-ansible/             IaC: nginx, SSL, docker-compose deploy, UFW
-docs/                API, deployment and optimization documentation
+main.py            FastAPI app + request lifecycle (limits → cache → graph → trace)
+config.py          Environment configuration + runtime constants
+agents/            graph_config (StateGraph wiring + routing), tools, mcp_server
+nodes/             Graph nodes: intent, retrieval, generation, revision, handoff, logging…
+providers/         LLM layer: llm (routing + fallback), deepseek_client, deepseek_optimizer
+rag/               ingest (chunk+embed KB), db (Qdrant), retention (LGPD purge)
+core/              cache (Redis + semantic), behavior (lead scoring), language
+safety/            guardrails (injection/PII), security (rate limit + spend cap)
+observability/     langfuse client + prompts, analytics (conversion funnel)
+evals/             LLM quality gates: intent, tools, adversarial, RAG, multi-turn, language
+tests/             pytest suite (contract, rate limit, spend cap, hardening, …)
+.github/workflows/ CI (pytest + evals) + CD (Ansible deploy with approval gate)
+ansible/           IaC: nginx, SSL, docker-compose deploy, UFW
+docs/              API, deployment, ADRs
 ```
 
 ## Engineering highlights

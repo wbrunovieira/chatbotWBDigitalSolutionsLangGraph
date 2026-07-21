@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 import config
-import llm
+from providers import llm
 
 
 class FakeResp:

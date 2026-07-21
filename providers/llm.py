@@ -14,7 +14,7 @@ import logging
 import httpx
 
 import config
-import deepseek_client
+from providers import deepseek_client
 
 # task -> configured model. Unknown tasks fall back to the primary model.
 _TASK_MODELS = {

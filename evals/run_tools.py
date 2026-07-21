@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT))
 
 import _deepseek  # noqa: E402 — evals/_deepseek.py (resilient DeepSeek call)
 from nodes import TOOL_SYSTEM_PROMPT  # noqa: E402
-from tools import TOOL_SPECS  # noqa: E402
+from agents.tools import TOOL_SPECS  # noqa: E402
 
 
 def picked_tool(message: str):

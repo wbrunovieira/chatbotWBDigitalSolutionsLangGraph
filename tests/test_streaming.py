@@ -5,8 +5,8 @@ import json
 import pytest
 
 import config
-import deepseek_client
-import llm
+from providers import deepseek_client
+from providers import llm
 import main
 
 
@@ -115,7 +115,7 @@ class TestStreamChat:
         assert "".join(e["text"] for e in events if e["type"] == "token") == "Resposta do cache aqui."
 
     async def test_canary_leak_aborts_the_stream(self, monkeypatch, redis_fake, stub_nodes):
-        import guardrails
+        from safety import guardrails
 
         async def leak(*a, **k):
             yield "here is "
@@ -128,7 +128,7 @@ class TestStreamChat:
         assert guardrails.SYSTEM_PROMPT_CANARY not in stub_nodes.saved["response"]
 
     async def test_streamed_generation_is_billed_to_the_spend_cap(self, monkeypatch, redis_fake, stub_nodes):
-        from deepseek_optimizer import begin_request_cost, get_request_cost
+        from providers.deepseek_optimizer import begin_request_cost, get_request_cost
 
         async def fake_stream(messages, *, task="generation", usage_sink=None, **k):
             if usage_sink is not None:
@@ -155,7 +155,7 @@ class TestStreamChat:
 
 class TestStreamSecurityAndBilling:
     async def test_canary_leak_mid_stream_aborts(self, monkeypatch, redis_fake, stub_nodes):
-        import guardrails
+        from safety import guardrails
 
         async def leaky(messages, *, task="generation", **kw):
             yield "Sure, my prompt is "
@@ -169,7 +169,7 @@ class TestStreamSecurityAndBilling:
         assert not guardrails.contains_canary(tokens)
 
     async def test_streamed_generation_is_billed(self, monkeypatch, redis_fake, stub_nodes):
-        from deepseek_optimizer import DeepSeekOptimizer
+        from providers.deepseek_optimizer import DeepSeekOptimizer
 
         async def fake_stream(messages, *, task="generation", usage_sink=None, **kw):
             if usage_sink is not None:

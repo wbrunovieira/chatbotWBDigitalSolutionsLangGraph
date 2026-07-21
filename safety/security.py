@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from fastapi import HTTPException, Request
 
 import config
-from cache import get_redis
+from core.cache import get_redis
 
 # Spend counters expire after 48h: covers the current UTC day with slack.
 SPEND_TTL_SECONDS = 172800
