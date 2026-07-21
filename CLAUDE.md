@@ -42,24 +42,24 @@ There are no tests in this project.
 POST /chat → Pattern cache check → Redis cache check → LangGraph state machine → Cache result → Return
 ```
 
-### LangGraph State Machine (`graph_config.py`)
+### LangGraph State Machine (`agents/graph_config.py`)
 
-The graph routes based on detected intent:
-- **greeting** → `generate_greeting_response` (hardcoded, no API call) → END
-- **off_topic** → `generate_off_topic_response` (LLM redirect) → END
-- **chat_with_agent** → END (handled by frontend)
+The graph routes based on detected intent (each canned node then runs `log_saving` → END):
+- **greeting** → `generate_greeting_response` (hardcoded, no API call)
+- **off_topic** → `generate_off_topic_response` (LLM redirect)
+- **chat_with_agent** → `generate_handoff_response` (hardcoded WhatsApp handoff, no API call)
 - **normal flow** → `retrieve_company_context` → `retrieve_user_context` → `augment_query` → `response_generation` → `response_revision` → `log_saving` → END
 
-State is a plain `Dict[str, Any]` passed through nodes. The Qdrant client is a process-wide
-singleton (`db.get_qdrant_client()`), not carried in state.
+State is a `ChatState` TypedDict passed through nodes. The Qdrant client is a process-wide
+singleton (`rag.db.get_qdrant_client()`), not carried in state.
 
 ### Three-Tier Caching
 
 1. **Pattern match** (`cached_responses.py`): Regex patterns → pre-built responses. Zero latency, zero API cost. Checked first in `main.py`.
-2. **Redis** (`cache.py`): SHA256 of `{message}_{language}_{current_page}` as key. 7-day TTL. Checked second.
-3. **DeepSeek context caching**: HTTP headers in `deepseek_optimizer.py` signal cache preferences to the API.
+2. **Redis** (`core/cache.py`): SHA256 of `{message}_{language}_{current_page}_{user_id}` as key. 7-day TTL. Checked second, plus a semantic (embedding-similarity) layer for shared/anon users.
+3. **DeepSeek context caching**: HTTP headers in `providers/deepseek_optimizer.py` signal cache preferences to the API.
 
-### Cost Optimization (`deepseek_optimizer.py`)
+### Cost Optimization (`providers/deepseek_optimizer.py`)
 
 DeepSeek offers 50% discount 16:30-00:30 UTC (13:30-21:30 Brazil time). The optimizer:
 - Tracks token usage and cost per API call
