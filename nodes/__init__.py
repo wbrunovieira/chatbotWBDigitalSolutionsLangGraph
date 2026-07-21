@@ -32,6 +32,7 @@ from nodes.generation import (
     language_instruction_for,
 )
 from nodes.greeting import GREETINGS, generate_greeting_response
+from nodes.handoff import HANDOFFS, generate_handoff_response
 from nodes.intent import (
     DEFAULT_INTENT,
     VALID_INTENTS,
