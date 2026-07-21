@@ -2,8 +2,8 @@
 
 import logging
 
-import guardrails
-import langfuse_client
+from safety import guardrails
+from observability import langfuse_client
 import nodes.embeddings as embeddings
 from config import (
     COMPANY_SCORE_THRESHOLD,
@@ -12,7 +12,7 @@ from config import (
     USER_CONTEXT_SCORE_THRESHOLD,
     USER_CONTEXT_TOP_K,
 )
-from db import get_qdrant_client
+from rag.db import get_qdrant_client
 
 # Top-k retrieval over the chunked knowledge base (see ingest.py). The score threshold
 # drops weak matches; cosine similarity, so higher is closer. Retrieval only runs for

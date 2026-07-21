@@ -29,7 +29,7 @@ sys.path.insert(0, str(ROOT))
 
 import _deepseek  # noqa: E402 — evals/_deepseek.py (resilient DeepSeek call)
 from config import COMPANY_TOP_K  # noqa: E402
-from ingest import KB_PATH, chunk_document  # noqa: E402
+from rag.ingest import KB_PATH, chunk_document  # noqa: E402
 from nodes import compute_embedding  # noqa: E402
 
 

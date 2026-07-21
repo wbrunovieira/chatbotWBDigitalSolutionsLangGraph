@@ -14,7 +14,7 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-import tools
+from agents import tools
 
 mcp = FastMCP("wb-digital-solutions")
 

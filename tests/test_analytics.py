@@ -5,8 +5,8 @@ from types import SimpleNamespace
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
-import analytics
-import db
+from observability import analytics
+from rag import db
 import main
 
 

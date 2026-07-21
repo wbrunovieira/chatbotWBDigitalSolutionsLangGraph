@@ -9,8 +9,8 @@ import json
 import re
 from typing import Optional, Dict, Any, List
 from config import LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST
-from langfuse_prompts_v3 import PROMPTS_V3
-from guardrails import redact_pii
+from observability.langfuse_prompts_v3 import PROMPTS_V3
+from safety.guardrails import redact_pii
 
 
 def _redact_messages(messages):
@@ -320,7 +320,7 @@ async def evaluate_response(
 
         # Call LLM for evaluation (routed via llm.py — same model routing + provider fallback;
         # runs on a tighter timeout).
-        import llm
+        from providers import llm
 
         resp = await llm.chat_completion(
             [{"role": "user", "content": compiled}],

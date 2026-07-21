@@ -9,7 +9,7 @@ import asyncio
 
 import pytest
 
-from deepseek_optimizer import (
+from providers.deepseek_optimizer import (
     DeepSeekOptimizer,
     add_request_cost,
     begin_request_cost,

@@ -1,6 +1,6 @@
 """WhatsApp is surfaced by trigger (contact asked / handoff), not forced on every answer (#331)."""
 
-from langfuse_prompts_v3 import PROMPTS_V3
+from observability.langfuse_prompts_v3 import PROMPTS_V3
 
 
 def _template(name):

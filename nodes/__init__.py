@@ -7,7 +7,7 @@ single module, so `import nodes; nodes.X` keeps working. `deepseek_client` is im
 too so `nodes.deepseek_client` stays a live module handle (tests patch it).
 """
 
-import deepseek_client  # noqa: F401  (kept so nodes.deepseek_client resolves for test patches)
+from providers import deepseek_client  # noqa: F401  (kept so nodes.deepseek_client resolves for test patches)
 
 # Import submodules so `nodes.generation`, `nodes.embeddings`, etc. resolve (tests patch there).
 from nodes import (  # noqa: F401

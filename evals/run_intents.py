@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # so `python evals/run_intents.py` finds the root modules
 
 import _deepseek  # noqa: E402 — evals/_deepseek.py (resilient DeepSeek call)
-from langfuse_client import LOCAL_PROMPTS, LocalPrompt  # noqa: E402
+from observability.langfuse_client import LOCAL_PROMPTS, LocalPrompt  # noqa: E402
 from nodes import parse_intent  # noqa: E402
 
 

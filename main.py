@@ -14,29 +14,29 @@ from qdrant_client.http.models import VectorParams, Distance
 from fastapi.middleware.cors import CORSMiddleware
 import nodes
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from graph_config import graph, evict_thread
+from agents.graph_config import graph, evict_thread
 import logging
 from dotenv import load_dotenv
 import config
-import ingest
-from db import get_qdrant_client
-import cache
-from cache import get_cached_response, set_cached_response
+from rag import ingest
+from rag.db import get_qdrant_client
+from core import cache
+from core.cache import get_cached_response, set_cached_response
 from nodes.embeddings import compute_embedding
 from hashlib import sha256
 import time
-from deepseek_optimizer import (
+from providers.deepseek_optimizer import (
     DeepSeekOptimizer,
     begin_request_cost,
     get_request_cost,
 )
-from security import enforce_chat_limits, record_spend, get_spend_snapshot
-import tools
-import guardrails
-import llm
-import analytics
-from language import resolve_language
-from langfuse_client import create_trace, update_trace, flush_langfuse, evaluate_response, score_trace, set_current_trace
+from safety.security import enforce_chat_limits, record_spend, get_spend_snapshot
+from agents import tools
+from safety import guardrails
+from providers import llm
+from observability import analytics
+from core.language import resolve_language
+from observability.langfuse_client import create_trace, update_trace, flush_langfuse, evaluate_response, score_trace, set_current_trace
 
 load_dotenv()
 

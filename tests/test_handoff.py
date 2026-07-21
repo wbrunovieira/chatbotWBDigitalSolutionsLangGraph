@@ -2,7 +2,7 @@
 
 import config
 import nodes
-from graph_config import route_after_intent
+from agents.graph_config import route_after_intent
 
 
 class TestGenerateHandoff:

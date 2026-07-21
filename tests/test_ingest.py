@@ -1,6 +1,6 @@
 """KB ingestion: heading-aware chunking + idempotent, content-addressed upsert."""
 
-import ingest
+from rag import ingest
 
 
 class FakeQdrant:

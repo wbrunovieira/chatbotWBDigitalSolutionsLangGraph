@@ -134,7 +134,7 @@ Pydantic validation, timeout + retry, and per-IP lead cap.
 
 ```bash
 pip install -r requirements-dev.txt   # pins mcp==1.28.1
-python mcp_server.py                   # stdio transport (local, trusted)
+python -m agents.mcp_server                   # stdio transport (local, trusted)
 ```
 
 > `create_lead` writes to the CRM with no auth, so the trust boundary is the local
@@ -148,14 +148,15 @@ Connect from **Claude Desktop** (`claude_desktop_config.json`):
   "mcpServers": {
     "wb-digital-solutions": {
       "command": "python",
-      "args": ["/absolute/path/to/mcp_server.py"]
+      "args": ["-m", "agents.mcp_server"],
+      "cwd": "/absolute/path/to/repo"
     }
   }
 }
 ```
 
 Then ask *"create a lead for Padaria do Zé"* and Claude calls the CRM through the server.
-Inspect it with `npx @modelcontextprotocol/inspector python mcp_server.py`.
+Inspect it with `npx @modelcontextprotocol/inspector python -m agents.mcp_server`.
 
 ## Running locally
 
@@ -226,20 +227,24 @@ Infrastructure is codified under [`ansible/`](ansible/): playbooks provision an 
 
 ## Repository layout
 
+App code is grouped into topical packages; only `main.py` and `config.py` sit at the root
+(so `uvicorn main:app` and the deploy pipeline stay put).
+
 ```
-main.py              FastAPI app + request lifecycle (limits → cache → graph → trace)
-graph_config.py      LangGraph StateGraph wiring + conditional routing
-nodes.py             Graph nodes: intent, retrieval, generation, revision, logging
-security.py          Per-IP rate limiting + daily spend circuit-breaker (Redis)
-deepseek_optimizer.py  Token/usage optimization, per-request cost accounting
-langfuse_*.py        Langfuse client, tracing, scoring, versioned prompts (v1–v3)
-cache.py / cached_responses.py  Redis caching + pattern cache
-config.py            Environment configuration
-tests/               pytest suite (contract, rate limit, spend cap, hardening)
-.github/workflows/   CI (pytest) + CD (Ansible deploy with approval gate)
-experiments/         Offline evaluation harness + datasets
-ansible/             IaC: nginx, SSL, docker-compose deploy, UFW
-docs/                API, deployment and optimization documentation
+main.py            FastAPI app + request lifecycle (limits → cache → graph → trace)
+config.py          Environment configuration + runtime constants
+agents/            graph_config (StateGraph wiring + routing), tools, mcp_server
+nodes/             Graph nodes: intent, retrieval, generation, revision, handoff, logging…
+providers/         LLM layer: llm (routing + fallback), deepseek_client, deepseek_optimizer
+rag/               ingest (chunk+embed KB), db (Qdrant), retention (LGPD purge)
+core/              cache (Redis + semantic), behavior (lead scoring), language
+safety/            guardrails (injection/PII), security (rate limit + spend cap)
+observability/     langfuse client + prompts, analytics (conversion funnel)
+evals/             LLM quality gates: intent, tools, adversarial, RAG, multi-turn, language
+tests/             pytest suite (contract, rate limit, spend cap, hardening, …)
+.github/workflows/ CI (pytest + evals) + CD (Ansible deploy with approval gate)
+ansible/           IaC: nginx, SSL, docker-compose deploy, UFW
+docs/              API, deployment, ADRs
 ```
 
 ## Engineering highlights

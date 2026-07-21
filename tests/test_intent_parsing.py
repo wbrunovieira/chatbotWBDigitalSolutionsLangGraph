@@ -102,7 +102,7 @@ class TestPromptsRequestJson:
     """
 
     def test_local_fallback_prompt_is_json_and_compiles(self):
-        from langfuse_client import LOCAL_PROMPTS, LocalPrompt
+        from observability.langfuse_client import LOCAL_PROMPTS, LocalPrompt
 
         tmpl = LOCAL_PROMPTS["detect_intent"]
         compiled = LocalPrompt("detect_intent", tmpl["template"], tmpl["type"]).compile(
@@ -113,6 +113,6 @@ class TestPromptsRequestJson:
         assert "json" in compiled.lower()       # json_object mode requirement
 
     def test_langfuse_source_prompt_is_json(self):
-        from langfuse_prompts_v3 import PROMPTS_V3
+        from observability.langfuse_prompts_v3 import PROMPTS_V3
 
         assert "json" in PROMPTS_V3["detect_intent"]["prompt"].lower()

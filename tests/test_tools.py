@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 import config
-import tools
+from agents import tools
 
 
 class FakeResponse:

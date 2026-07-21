@@ -1,6 +1,6 @@
 """Guardrails: hardened system prompt + the output canary backstop."""
 
-import guardrails
+from safety import guardrails
 
 
 class TestHardenSystemPrompt:
@@ -127,7 +127,7 @@ class TestRedactPii:
 
 class TestLangfuseChildObservationRedaction:
     def test_redacts_message_content_and_tool_call_arguments(self):
-        import langfuse_client
+        from observability import langfuse_client
 
         msgs = [
             {"role": "system", "content": "you are an assistant"},

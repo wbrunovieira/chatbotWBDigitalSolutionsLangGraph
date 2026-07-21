@@ -3,8 +3,8 @@
 import pytest
 
 import nodes
-import langfuse_client
-import tools
+from observability import langfuse_client
+from agents import tools
 
 
 def tool_call_response(name, arguments, content=None):

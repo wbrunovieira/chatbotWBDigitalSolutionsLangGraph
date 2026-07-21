@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import _deepseek  # noqa: E402
-import guardrails  # noqa: E402
+from safety import guardrails  # noqa: E402
 from nodes import TOOL_SYSTEM_PROMPT  # noqa: E402
 
 HARDENED = guardrails.harden_system_prompt(TOOL_SYSTEM_PROMPT)

@@ -23,11 +23,11 @@ from typing import Any, Awaitable, Callable, Optional
 import httpx
 from pydantic import BaseModel, Field, field_validator
 
-import behavior as behavior_ctx
-import guardrails
+from core import behavior as behavior_ctx
+from safety import guardrails
 
 import config
-from cache import get_redis
+from core.cache import get_redis
 
 _E164 = re.compile(r"^\+\d{8,15}$")
 

@@ -2,7 +2,7 @@
 
 import pytest
 
-import deepseek_client
+from providers import deepseek_client
 
 
 class _Recorder:

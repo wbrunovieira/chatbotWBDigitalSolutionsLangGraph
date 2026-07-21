@@ -2,7 +2,7 @@
 
 import pytest
 
-from language import resolve_language
+from core.language import resolve_language
 
 
 class TestExplicitLanguage:
@@ -57,7 +57,7 @@ class TestLanguageInstructions:
 
     def test_covers_every_supported_language(self):
         import nodes
-        from language import SUPPORTED_LANGUAGES
+        from core.language import SUPPORTED_LANGUAGES
         for lang in SUPPORTED_LANGUAGES:
             assert lang in nodes.LANGUAGE_INSTRUCTIONS
 

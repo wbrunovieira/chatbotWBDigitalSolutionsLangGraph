@@ -95,13 +95,18 @@ Required in `.env`:
 - `REDIS_PORT` — Redis port (default: `6379`)
 - `REDIS_DB` — Redis DB number (default: `0`)
 
-## File Responsibilities
+## Project structure
 
-- **main.py** — FastAPI app, endpoints, Qdrant collection init, cache orchestration, page context mapping
-- **graph_config.py** — LangGraph `StateGraph` wiring and conditional routing
-- **nodes.py** — All graph node functions: intent detection, embedding, context retrieval, LLM calls, response revision, Qdrant logging, greeting/off-topic generators
-- **config.py** — Env var loading and Redis config constants
-- **cache.py** — Async Redis get/set via `redis.asyncio`
-- **cached_responses.py** — Pre-computed pattern-matched responses by category and language
-- **deepseek_optimizer.py** — Discount time detection, token tracking, cost estimation, optimization headers
-- **company_info.md** — Company profile used for RAG (loaded into Qdrant `company_info` collection)
+App code is grouped into topical packages; only `main.py` and `config.py` live at the root
+(so `uvicorn main:app` and the deploy pipeline are unchanged).
+
+- **main.py** — FastAPI app, endpoints (`/chat`, `/chat/stream`, `/usage-report`, `/analytics/funnel`), cache orchestration, response shaping.
+- **config.py** — Env var loading and all runtime constants.
+- **agents/** — `graph_config.py` (LangGraph `StateGraph` wiring + conditional routing), `tools.py` (create_lead / schedule_meeting / handoff_to_human), `mcp_server.py`.
+- **nodes/** — graph node functions split by concern: `intent`, `retrieval`, `generation`, `revision`, `logging_node`, `greeting`, `handoff`, `offtopic`, `embeddings`.
+- **providers/** — LLM layer: `llm.py` (routing + fallback), `deepseek_client.py` (transport), `deepseek_optimizer.py` (cost/spend tracking).
+- **rag/** — `ingest.py` (chunk + embed the KB), `db.py` (Qdrant singleton), `retention.py` (LGPD purge, run via `python -m rag.retention`).
+- **core/** — `cache.py` (Redis + semantic cache), `behavior.py` (lead scoring), `language.py` (language resolution).
+- **safety/** — `guardrails.py` (injection pre-filter, output backstop, PII redaction), `security.py` (rate limit + spend cap).
+- **observability/** — `langfuse_client.py`, `langfuse_prompts_v3.py` (prompt fallbacks), `analytics.py` (conversion funnel).
+- **company_info.md** — Company profile used for RAG (loaded into Qdrant `company_info` collection).

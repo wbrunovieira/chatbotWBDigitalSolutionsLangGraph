@@ -12,10 +12,10 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
-import db
+from rag import db
 import main
-import security
-from deepseek_optimizer import add_request_cost
+from safety import security
+from providers.deepseek_optimizer import add_request_cost
 
 ALLOWED_ORIGIN = "https://www.wbdigitalsolutions.com"
 
