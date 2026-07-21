@@ -183,3 +183,18 @@ class TestStreamSecurityAndBilling:
                             staticmethod(lambda **kw: seen.update(kw)))
         await _collect(main._stream_chat(_payload()))
         assert seen.get("input_tokens") == 100 and seen.get("output_tokens") == 50
+
+
+class TestStreamHandoff:
+    async def test_chat_with_agent_streams_a_handoff_not_empty(self, monkeypatch, redis_fake, stub_nodes):
+        import config
+
+        async def detect(state):
+            return {**state, "intent": "chat_with_agent"}
+
+        monkeypatch.setattr(main.nodes, "detect_intent", detect)
+        events = _parse(await _collect(main._stream_chat(_payload("quero falar com uma pessoa"))))
+        text = "".join(e.get("text", "") for e in events if e["type"] == "token")
+        assert text.strip()  # not empty
+        assert config.WHATSAPP_CONTACT in text
+        assert events[-1]["type"] == "done"

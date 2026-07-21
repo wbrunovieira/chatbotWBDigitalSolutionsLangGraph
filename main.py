@@ -375,12 +375,13 @@ async def _stream_chat(payload: ChatRequest):
     intent = state.get("intent", "inquire_services")
     yield _sse({"type": "start", "intent": intent})
 
-    if intent == "chat_with_agent":
-        yield _sse({"type": "done", "cached": False, "intent": intent, "language_used": language})
-        return
-
     if intent == "greeting":
         state = await nodes.generate_greeting_response(state)
+        full = state.get("response", "")
+        for piece in _chunk_text(full):
+            yield _sse({"type": "token", "text": piece})
+    elif intent == "chat_with_agent":
+        state = await nodes.generate_handoff_response(state)
         full = state.get("response", "")
         for piece in _chunk_text(full):
             yield _sse({"type": "token", "text": piece})

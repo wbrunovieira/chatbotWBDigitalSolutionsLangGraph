@@ -8,6 +8,7 @@ from typing_extensions import TypedDict
 from nodes import (
     detect_intent,
     generate_greeting_response,
+    generate_handoff_response,
     generate_off_topic_response,
     retrieve_company_context,
     retrieve_user_context,
@@ -57,15 +58,19 @@ workflow.add_node("response_revision", revise_response)
 workflow.add_node("log_saving", save_log_qdrant)
 workflow.add_node("generate_greeting_response", generate_greeting_response)
 workflow.add_node("generate_off_topic_response", generate_off_topic_response)
+workflow.add_node("generate_handoff_response", generate_handoff_response)
 workflow.add_edge("generate_greeting_response", "log_saving")
 workflow.add_edge("generate_off_topic_response", "log_saving")
+workflow.add_edge("generate_handoff_response", "log_saving")
 
 workflow.set_entry_point("intent_detection")
 
 
 def route_after_intent(state):
-    """Route after intent detection. Greetings/off-topic short-circuit to a canned node;
-    chat_with_agent ends (the frontend takes over); everything else runs the full RAG flow."""
+    """Route after intent detection. Greetings/off-topic/handoff short-circuit to a canned
+    node; everything else runs the full RAG flow. chat_with_agent used to route to END with
+    no response (relying on the frontend to handle the handoff), which left the widget empty
+    if it didn't — now it returns a deterministic WhatsApp handoff message."""
     intent = state.get("intent", "")
 
     if intent == "greeting":
@@ -73,7 +78,7 @@ def route_after_intent(state):
     elif intent == "off_topic":
         return "generate_off_topic_response"
     elif intent == "chat_with_agent":
-        return END
+        return "generate_handoff_response"
 
     return "retrieve_company_context"
 
@@ -83,7 +88,7 @@ workflow.add_conditional_edges(
     {
         "generate_greeting_response": "generate_greeting_response",
         "generate_off_topic_response": "generate_off_topic_response",
-        END: END,
+        "generate_handoff_response": "generate_handoff_response",
         "retrieve_company_context": "retrieve_company_context"  # Normal flow
     }
 )
