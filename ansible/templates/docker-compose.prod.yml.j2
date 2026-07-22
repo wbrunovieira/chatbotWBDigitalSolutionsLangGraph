@@ -91,6 +91,10 @@ services:
       - "127.0.0.1:{{ app_port }}:8000"
     environment:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      # Secondary LLM provider (providers/llm.py) — blank disables failover.
+      - FALLBACK_API_URL=${FALLBACK_API_URL}
+      - FALLBACK_API_KEY=${FALLBACK_API_KEY}
+      - FALLBACK_MODEL=${FALLBACK_MODEL}
       - QDRANT_HOST=http://chatbot_qdrant:6333
       - QDRANT_API_KEY=${QDRANT_API_KEY}
       - REDIS_HOST=redis-chatbot
