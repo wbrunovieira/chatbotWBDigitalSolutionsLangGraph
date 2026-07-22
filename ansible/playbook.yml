@@ -368,6 +368,13 @@
         minute: "0"
         hour: "3"
 
+    - name: Schedule daily DeepSeek low-credit alert
+      cron:
+        name: "deepseek low-credit alert"
+        job: "docker exec chatbot_app python -m providers.balance >> /var/log/chatbot-balance.log 2>&1"
+        minute: "0"
+        hour: "8"
+
     - name: Clean up old Docker images
       command: docker image prune -f
       ignore_errors: yes

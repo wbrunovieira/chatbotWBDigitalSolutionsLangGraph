@@ -118,6 +118,9 @@ services:
       - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
       - EVOLUTION_INSTANCE=${EVOLUTION_INSTANCE}
       - MY_WHATSAPP_NUMBER=${MY_WHATSAPP_NUMBER}
+      # Low-credit alert (providers/balance.py, run daily by cron) — WhatsApp the team
+      # when the DeepSeek balance drops below this USD amount.
+      - DEEPSEEK_BALANCE_ALERT_THRESHOLD=${DEEPSEEK_BALANCE_ALERT_THRESHOLD}
     depends_on:
       - qdrant
       - redis-chatbot
