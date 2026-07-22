@@ -110,6 +110,11 @@ SHARED_USER_IDS = {"anon", "experiment", "", None}
 # LGPD retention: delete chat_logs points older than this many days (run by retention.py).
 CHAT_LOGS_RETENTION_DAYS = int(os.getenv("CHAT_LOGS_RETENTION_DAYS", "90"))
 
+# Low-credit alert (providers/balance.py, run daily by cron): when the DeepSeek account
+# balance drops below this USD amount, WhatsApp the team so they top up before the bot goes
+# down for lack of credit.
+DEEPSEEK_BALANCE_ALERT_THRESHOLD = float(os.getenv("DEEPSEEK_BALANCE_ALERT_THRESHOLD", "2.0"))
+
 # Answer quality (see nodes.revision / main._maybe_schedule_judge). Kept OFF the hot path:
 # revision is a second LLM round-trip, so only long answers that need trimming toward the
 # ~500-char target are revised; short, direct replies are returned as generated. The judge
