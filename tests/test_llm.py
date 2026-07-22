@@ -100,6 +100,38 @@ class TestFallback:
         assert resp.status_code == 200
         assert calls[-1]["model"] == "backup-model"
 
+    @pytest.mark.parametrize("status", [402, 429, 500, 503])
+    async def test_unavailable_statuses_fail_over(self, monkeypatch, status):
+        """402 (out of credit), 429 (throttled) and 5xx all mean 'try the secondary'."""
+        _enable_fallback(monkeypatch)
+        calls = []
+
+        async def fake_cc(messages, **kwargs):
+            calls.append(kwargs)
+            if "api_url" not in kwargs:  # primary
+                return FakeResp(status)
+            return FakeResp(200)  # secondary
+
+        monkeypatch.setattr(llm.deepseek_client, "chat_completion", fake_cc)
+        resp = await llm.chat_completion([], task="generation")
+        assert resp.status_code == 200
+        assert calls[-1]["model"] == "backup-model"
+
+    @pytest.mark.parametrize("status", [400, 401, 403, 404, 422])
+    async def test_client_error_statuses_do_not_fail_over(self, monkeypatch, status):
+        """A 4xx that's our fault (bad request/key/model) must surface, not replay on secondary."""
+        _enable_fallback(monkeypatch)
+        calls = []
+
+        async def fake_cc(messages, **kwargs):
+            calls.append(kwargs)
+            return FakeResp(status)
+
+        monkeypatch.setattr(llm.deepseek_client, "chat_completion", fake_cc)
+        resp = await llm.chat_completion([], task="generation")
+        assert resp.status_code == status
+        assert len(calls) == 1  # primary only, no failover
+
     async def test_success_does_not_call_fallback(self, monkeypatch):
         _enable_fallback(monkeypatch)
         calls = []

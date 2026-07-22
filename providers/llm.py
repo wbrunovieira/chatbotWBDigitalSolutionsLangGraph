@@ -32,6 +32,19 @@ def fallback_configured() -> bool:
     return bool(config.FALLBACK_API_URL and config.FALLBACK_API_KEY and config.FALLBACK_MODEL)
 
 
+# Statuses where the primary can't serve a well-formed request right now, so retrying the
+# SAME request on the secondary is worth it: any 5xx (provider outage), 402 (DeepSeek's
+# "Insufficient Balance" — the out-of-credit case our balance alert also guards), and 429
+# (rate-limited / at capacity). A 4xx like 400/401/403/404 is our fault (bad request, revoked
+# key, wrong model); failing over would just replay the broken request and burn the secondary,
+# so we let those surface instead.
+_FAILOVER_STATUSES = frozenset({402, 429})
+
+
+def _should_failover(status: int) -> bool:
+    return status >= 500 or status in _FAILOVER_STATUSES
+
+
 async def _fallback_completion(messages, **kwargs) -> httpx.Response:
     """Same request against the secondary provider (model/url/key from config)."""
     kwargs.pop("model", None)
@@ -58,10 +71,11 @@ async def chat_completion(messages: list, *, task: str = "generation", **kwargs)
             logging.warning("LLM primary error on task=%s (%s); failing over to secondary", task, exc)
             return await _fallback_completion(messages, **kwargs)
         raise
-    # A 5xx is a provider outage, not a client error — fail over too, if we can. (getattr:
-    # a real httpx.Response always has status_code; be defensive for odd/faked responses.)
+    # Some statuses mean "primary is down / out of credit / throttled" rather than a client
+    # error — fail over too, if we can. (getattr: a real httpx.Response always has status_code;
+    # be defensive for odd/faked responses.)
     status = getattr(resp, "status_code", 200)
-    if status >= 500 and fallback_configured():
+    if _should_failover(status) and fallback_configured():
         logging.warning("LLM primary %s on task=%s; failing over to secondary", status, task)
         return await _fallback_completion(messages, **kwargs)
     return resp
