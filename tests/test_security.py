@@ -122,6 +122,24 @@ class TestSpendCap:
             await security.record_spend("1.2.3.4", 0.05)  # still over threshold
             assert "SPEND ALERT" not in caplog.text  # but must not alert twice a day
 
+    async def test_crossing_threshold_dispatches_whatsapp_once(self, redis_fake, limits, monkeypatch):
+        import agents.tools as tools
+
+        sent = []
+        # Capture the alert text at call time (record_spend lazy-imports these), and no-op the
+        # fire-and-forget so the test doesn't depend on the background task actually running.
+        monkeypatch.setattr(tools, "_notify_team_whatsapp", lambda text: sent.append(text))
+        monkeypatch.setattr(tools, "_fire_and_forget", lambda coro: None)
+
+        await security.record_spend("1.2.3.4", 0.60)  # 60% — below threshold
+        assert sent == []
+
+        await security.record_spend("1.2.3.4", 0.15)  # 75% — crosses
+        assert len(sent) == 1 and "%" in sent[0]
+
+        await security.record_spend("1.2.3.4", 0.05)  # still over — must not re-alert
+        assert len(sent) == 1
+
     async def test_snapshot_reports_circuit_state(self, redis_fake, limits):
         assert (await security.get_spend_snapshot())["circuit_open"] is False
 

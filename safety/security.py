@@ -147,13 +147,27 @@ async def record_spend(ip: str, cost_usd: float) -> None:
     # SET NX keeps this to a single alert per day, even across workers.
     is_first_alert = await get_redis().set(f"spend:alert:{day}", "1", ex=SPEND_TTL_SECONDS, nx=True)
     if is_first_alert:
+        percent = (global_spend / config.DAILY_SPEND_LIMIT_USD) * 100
         logging.error(
             "SPEND ALERT: $%.4f of $%.2f (%.0f%% of the daily cap) on %s",
             global_spend,
             config.DAILY_SPEND_LIMIT_USD,
-            (global_spend / config.DAILY_SPEND_LIMIT_USD) * 100,
+            percent,
             day,
         )
+        # WhatsApp the team too, so the alert isn't buried in container logs. Lazy import to
+        # avoid an import cycle (agents.tools -> safety.guardrails) and keep the hot path light;
+        # fire-and-forget since notify does its own HTTP call and this branch runs once per day.
+        try:
+            from agents.tools import _fire_and_forget, _notify_team_whatsapp
+
+            _fire_and_forget(_notify_team_whatsapp(
+                f"⚠️ Gasto diário do chatbot em US$ {global_spend:.2f} de US$ "
+                f"{config.DAILY_SPEND_LIMIT_USD:.2f} ({percent:.0f}% do teto). Acima disso o "
+                f"/chat corta pra 503 — confira se é uso real ou abuso."
+            ))
+        except Exception as exc:  # noqa: BLE001 — alerting must never break spend accounting
+            logging.error("spend WhatsApp alert failed to dispatch: %s", exc)
 
 
 async def get_spend_snapshot() -> dict:
